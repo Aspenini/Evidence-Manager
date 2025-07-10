@@ -1,135 +1,18 @@
 #!/usr/bin/env python3
 """
-Evidence Manager - Single File Version
-A self-contained evidence management app with built-in dependency check and GUI.
-Just run this file: python evidence_manager.py
+Evidence Manager
+A comprehensive evidence management application built with Python and wxPython.
 """
 
 import sys
 import os
-import subprocess
-import importlib.util
 import json
 import shutil
 import zipfile
 import tempfile
-import threading
-import requests
-import wx
-
-__version__ = "1.1.1"
-
-GITHUB_REPO = "Aspenini/Evidence-Manager"
-GITHUB_API_RELEASES = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
-
-# Dependency check and install prompt
-REQUIRED = [
-    ("wx", "wxPython"),
-    ("PIL", "Pillow"),
-]
-
-def check_and_install():
-    missing = []
-    for mod, pkg in REQUIRED:
-        if importlib.util.find_spec(mod) is None:
-            print(f"❌ {pkg} is not installed.")
-            missing.append(pkg)
-        else:
-            print(f"✅ {pkg} is available.")
-    if missing:
-        print("\nMissing dependencies detected:", ", ".join(missing))
-        resp = input("Would you like to install them now? (y/n): ").strip().lower()
-        if resp in ("y", "yes"):
-            try:
-                subprocess.check_call([sys.executable, "-m", "pip", "install"] + missing)
-                print("\nDependencies installed! Please re-run the program.")
-            except Exception as e:
-                print(f"❌ Failed to install dependencies: {e}")
-            sys.exit(0)
-        else:
-            print("Please install the required dependencies and re-run this script.")
-            sys.exit(1)
-
-check_and_install()
-
-# --- Auto-update logic ---
-def check_for_update(parent=None):
-    try:
-        resp = requests.get(GITHUB_API_RELEASES, timeout=5)
-        if resp.status_code != 200:
-            return
-        data = resp.json()
-        latest_tag = data.get("tag_name", "").lstrip("v")
-        if not latest_tag:
-            return
-        if version_tuple(latest_tag) > version_tuple(__version__):
-            if parent:
-                dlg = wx.MessageDialog(parent, f"A new version (v{latest_tag}) is available. Do you want to update?", "Update Available", wx.YES_NO | wx.ICON_QUESTION)
-                if dlg.ShowModal() == wx.ID_YES:
-                    asset = next((a for a in data.get("assets", []) if a["name"].endswith(".zip")), None)
-                    if asset:
-                        download_and_replace_exe(asset["browser_download_url"], parent)
-                dlg.Destroy()
-    except Exception as e:
-        pass  # Silently ignore update errors
-
-def version_tuple(v):
-    return tuple(map(int, (v.split("."))))
-
-def download_and_replace_exe(zip_url, parent):
-    try:
-        # Download zip
-        tmp_zip = os.path.join(tempfile.gettempdir(), "evidence_manager_update.zip")
-        r = requests.get(zip_url, stream=True, timeout=30)
-        with open(tmp_zip, "wb") as f:
-            for chunk in r.iter_content(chunk_size=8192):
-                f.write(chunk)
-        # Extract zip
-        with zipfile.ZipFile(tmp_zip, 'r') as zipf:
-            extract_dir = os.path.join(tempfile.gettempdir(), "evidence_manager_update")
-            if os.path.exists(extract_dir):
-                shutil.rmtree(extract_dir)
-            zipf.extractall(extract_dir)
-            # Find exe inside any folder
-            exe_path = None
-            for root, dirs, files in os.walk(extract_dir):
-                for file in files:
-                    if file.lower().endswith('.exe'):
-                        exe_path = os.path.join(root, file)
-                        break
-                if exe_path:
-                    break
-            if not exe_path:
-                wx.MessageBox("No .exe found in update package.", "Update Error", wx.OK | wx.ICON_ERROR)
-                return
-            # Prepare to replace
-            current_exe = sys.executable
-            backup_exe = current_exe + ".bak"
-            wx.MessageBox("The app will now close to complete the update. Please re-launch after a few seconds.", "Update", wx.OK | wx.ICON_INFORMATION)
-            # Move current exe to .bak
-            try:
-                if os.path.exists(backup_exe):
-                    os.remove(backup_exe)
-                os.rename(current_exe, backup_exe)
-            except Exception as e:
-                wx.MessageBox(f"Failed to backup old exe: {e}", "Update Error", wx.OK | wx.ICON_ERROR)
-                return
-            # Move new exe in place
-            try:
-                shutil.copy2(exe_path, current_exe)
-            except Exception as e:
-                wx.MessageBox(f"Failed to replace exe: {e}", "Update Error", wx.OK | wx.ICON_ERROR)
-                return
-            # Exit app
-            wx.GetApp().Exit()
-    except Exception as e:
-        wx.MessageBox(f"Update failed: {e}", "Update Error", wx.OK | wx.ICON_ERROR)
-
-# --- End auto-update logic ---
-
-# Now import dependencies
-import wx.adv
 from datetime import datetime
+import wx
+import wx.adv
 from PIL import Image
 
 class EvidenceManager(wx.Frame):
@@ -933,7 +816,6 @@ class EvidenceManager(wx.Frame):
         
         try:
             # Extract to temporary directory
-            import tempfile
             with tempfile.TemporaryDirectory() as temp_dir:
                 zipf.extractall(temp_dir)
                 
@@ -989,7 +871,6 @@ class EvidenceManager(wx.Frame):
         
         try:
             # Extract to temporary directory
-            import tempfile
             with tempfile.TemporaryDirectory() as temp_dir:
                 zipf.extractall(temp_dir)
                 
@@ -1073,9 +954,6 @@ class EvidenceManager(wx.Frame):
 def main():
     app = wx.App()
     frame = EvidenceManager()
-    # Only check for update if running as exe
-    if getattr(sys, 'frozen', False):
-        threading.Thread(target=check_for_update, args=(frame,), daemon=True).start()
     frame.Show()
     app.MainLoop()
 
