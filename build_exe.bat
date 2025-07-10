@@ -1,7 +1,4 @@
 @echo off
-echo Evidence Manager - Build Executable
-echo ===================================
-echo.
 
 REM Install dependencies
 echo Installing dependencies...

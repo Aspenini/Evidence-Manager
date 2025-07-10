@@ -9,6 +9,18 @@ import sys
 import os
 import subprocess
 import importlib.util
+import json
+import shutil
+import zipfile
+import tempfile
+import threading
+import requests
+import wx
+
+__version__ = "1.1.0"
+
+GITHUB_REPO = "Aspenini/Evidence-Manager"
+GITHUB_API_RELEASES = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
 # Dependency check and install prompt
 REQUIRED = [
@@ -40,12 +52,83 @@ def check_and_install():
 
 check_and_install()
 
+# --- Auto-update logic ---
+def check_for_update(parent=None):
+    try:
+        resp = requests.get(GITHUB_API_RELEASES, timeout=5)
+        if resp.status_code != 200:
+            return
+        data = resp.json()
+        latest_tag = data.get("tag_name", "").lstrip("v")
+        if not latest_tag:
+            return
+        if version_tuple(latest_tag) > version_tuple(__version__):
+            if parent:
+                dlg = wx.MessageDialog(parent, f"A new version (v{latest_tag}) is available. Do you want to update?", "Update Available", wx.YES_NO | wx.ICON_QUESTION)
+                if dlg.ShowModal() == wx.ID_YES:
+                    asset = next((a for a in data.get("assets", []) if a["name"].endswith(".zip")), None)
+                    if asset:
+                        download_and_replace_exe(asset["browser_download_url"], parent)
+                dlg.Destroy()
+    except Exception as e:
+        pass  # Silently ignore update errors
+
+def version_tuple(v):
+    return tuple(map(int, (v.split("."))))
+
+def download_and_replace_exe(zip_url, parent):
+    try:
+        # Download zip
+        tmp_zip = os.path.join(tempfile.gettempdir(), "evidence_manager_update.zip")
+        r = requests.get(zip_url, stream=True, timeout=30)
+        with open(tmp_zip, "wb") as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                f.write(chunk)
+        # Extract zip
+        with zipfile.ZipFile(tmp_zip, 'r') as zipf:
+            extract_dir = os.path.join(tempfile.gettempdir(), "evidence_manager_update")
+            if os.path.exists(extract_dir):
+                shutil.rmtree(extract_dir)
+            zipf.extractall(extract_dir)
+            # Find exe inside any folder
+            exe_path = None
+            for root, dirs, files in os.walk(extract_dir):
+                for file in files:
+                    if file.lower().endswith('.exe'):
+                        exe_path = os.path.join(root, file)
+                        break
+                if exe_path:
+                    break
+            if not exe_path:
+                wx.MessageBox("No .exe found in update package.", "Update Error", wx.OK | wx.ICON_ERROR)
+                return
+            # Prepare to replace
+            current_exe = sys.executable
+            backup_exe = current_exe + ".bak"
+            wx.MessageBox("The app will now close to complete the update. Please re-launch after a few seconds.", "Update", wx.OK | wx.ICON_INFORMATION)
+            # Move current exe to .bak
+            try:
+                if os.path.exists(backup_exe):
+                    os.remove(backup_exe)
+                os.rename(current_exe, backup_exe)
+            except Exception as e:
+                wx.MessageBox(f"Failed to backup old exe: {e}", "Update Error", wx.OK | wx.ICON_ERROR)
+                return
+            # Move new exe in place
+            try:
+                shutil.copy2(exe_path, current_exe)
+            except Exception as e:
+                wx.MessageBox(f"Failed to replace exe: {e}", "Update Error", wx.OK | wx.ICON_ERROR)
+                return
+            # Exit app
+            wx.GetApp().Exit()
+    except Exception as e:
+        wx.MessageBox(f"Update failed: {e}", "Update Error", wx.OK | wx.ICON_ERROR)
+
+# --- End auto-update logic ---
+
 # Now import dependencies
-import wx
 import wx.adv
-import json
-import shutil
-import zipfile
 from datetime import datetime
 from PIL import Image
 
@@ -55,9 +138,100 @@ class EvidenceManager(wx.Frame):
         self.evidence_dir = "Evidence"
         self.current_person = None
         self.person_data = {}
+        self.settings_file = "settings.json"
+        self.dark_mode = False
+        self.load_settings()
         self.ensure_evidence_directory()
         self.load_persons()
         self.init_ui()
+        self.apply_theme()
+        
+    def load_settings(self):
+        """Load settings from settings.json"""
+        try:
+            if os.path.exists(self.settings_file):
+                with open(self.settings_file, 'r', encoding='utf-8') as f:
+                    settings = json.load(f)
+                    self.dark_mode = settings.get('dark_mode', False)
+        except Exception as e:
+            print(f"Error loading settings: {e}")
+            self.dark_mode = False
+    
+    def save_settings(self):
+        """Save settings to settings.json"""
+        try:
+            settings = {
+                'dark_mode': self.dark_mode
+            }
+            with open(self.settings_file, 'w', encoding='utf-8') as f:
+                json.dump(settings, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"Error saving settings: {e}")
+    
+    def apply_theme(self):
+        """Apply the current theme (light or dark mode)"""
+        if self.dark_mode:
+            # Dark mode colors
+            bg_color = wx.Colour(30, 30, 30)
+            text_color = wx.Colour(230, 230, 230)
+            panel_color = wx.Colour(45, 45, 45)
+            list_bg_color = wx.Colour(40, 40, 40)
+            button_bg = wx.Colour(50, 50, 50)
+            button_fg = wx.Colour(230, 230, 230)
+        else:
+            # Light mode colors
+            bg_color = wx.Colour(240, 240, 240)
+            text_color = wx.Colour(0, 0, 0)
+            panel_color = wx.Colour(255, 255, 255)
+            list_bg_color = wx.Colour(255, 255, 255)
+            button_bg = wx.Colour(240, 240, 240)
+            button_fg = wx.Colour(0, 0, 0)
+
+        self.SetBackgroundColour(bg_color)
+        for child in self.GetChildren():
+            self._apply_theme_recursive(child, bg_color, text_color, panel_color, list_bg_color, button_bg, button_fg)
+        self.Refresh()
+
+    def _apply_theme_recursive(self, widget, bg_color, text_color, panel_color, list_bg_color, button_bg, button_fg):
+        if isinstance(widget, wx.Panel):
+            widget.SetBackgroundColour(panel_color)
+        elif isinstance(widget, wx.ListCtrl):
+            widget.SetBackgroundColour(list_bg_color)
+            widget.SetForegroundColour(text_color)
+            # Set column and item colors for ListCtrl
+            for col in range(widget.GetColumnCount()):
+                widget.SetColumn(col, widget.GetColumn(col))  # force refresh
+            for i in range(widget.GetItemCount()):
+                widget.SetItemBackgroundColour(i, list_bg_color)
+                widget.SetItemTextColour(i, text_color)
+        elif isinstance(widget, wx.ListBox):
+            widget.SetBackgroundColour(list_bg_color)
+            widget.SetForegroundColour(text_color)
+        elif isinstance(widget, wx.Notebook):
+            widget.SetBackgroundColour(panel_color)
+            widget.SetForegroundColour(text_color)
+            for page in range(widget.GetPageCount()):
+                widget.GetPage(page).SetBackgroundColour(panel_color)
+        elif isinstance(widget, wx.Button):
+            widget.SetBackgroundColour(button_bg)
+            widget.SetForegroundColour(button_fg)
+        elif isinstance(widget, wx.StaticText):
+            widget.SetForegroundColour(text_color)
+        elif isinstance(widget, wx.TextCtrl):
+            widget.SetBackgroundColour(panel_color)
+            widget.SetForegroundColour(text_color)
+        for child in widget.GetChildren():
+            self._apply_theme_recursive(child, bg_color, text_color, panel_color, list_bg_color, button_bg, button_fg)
+
+    def toggle_dark_mode(self, event):
+        """Toggle between light and dark mode"""
+        self.dark_mode = not self.dark_mode
+        self.save_settings()
+        self.apply_theme()
+        # Update button text
+        if hasattr(self, 'dark_mode_btn'):
+            self.dark_mode_btn.SetLabel("🌙 Dark Mode" if not self.dark_mode else "☀️ Light Mode")
+        self.Refresh()
         
     def ensure_evidence_directory(self):
         if not os.path.exists(self.evidence_dir):
@@ -91,7 +265,6 @@ class EvidenceManager(wx.Frame):
                             'audio': []
                         }
     def init_ui(self):
-        self.SetBackgroundColour(wx.Colour(240, 240, 240))
         main_panel = wx.Panel(self)
         main_sizer = wx.BoxSizer(wx.HORIZONTAL)
         left_panel = wx.Panel(main_panel)
@@ -108,11 +281,21 @@ class EvidenceManager(wx.Frame):
         add_btn = wx.Button(buttons_panel, label="+ Add Person", size=(100, 30))
         add_btn.Bind(wx.EVT_BUTTON, self.on_add_person)
         
+        import_btn = wx.Button(buttons_panel, label="Import .ema", size=(100, 30))
+        import_btn.Bind(wx.EVT_BUTTON, self.on_import_evidence)
+        
         export_all_btn = wx.Button(buttons_panel, label="Export All", size=(100, 30))
         export_all_btn.Bind(wx.EVT_BUTTON, self.on_export_all_evidence)
         
+        # Dark mode toggle button
+        dark_mode_btn = wx.Button(buttons_panel, label="🌙 Dark Mode" if not self.dark_mode else "☀️ Light Mode", size=(100, 30))
+        dark_mode_btn.Bind(wx.EVT_BUTTON, self.toggle_dark_mode)
+        self.dark_mode_btn = dark_mode_btn  # Store reference for updating text
+        
         buttons_sizer.Add(add_btn, 0, wx.ALL, 2)
+        buttons_sizer.Add(import_btn, 0, wx.ALL, 2)
         buttons_sizer.Add(export_all_btn, 0, wx.ALL, 2)
+        buttons_sizer.Add(dark_mode_btn, 0, wx.ALL, 2)
         buttons_panel.SetSizer(buttons_sizer)
         header_sizer.Add(title, 1, wx.ALL | wx.EXPAND, 5)
         header_sizer.Add(buttons_panel, 0, wx.ALL, 5)
@@ -135,6 +318,7 @@ class EvidenceManager(wx.Frame):
         main_panel.SetSizer(main_sizer)
         self.update_person_list()
         self.Center()
+        self.apply_theme()
     def update_person_list(self):
         self.person_list.Clear()
         for person_name in sorted(self.person_data.keys()):
@@ -222,67 +406,59 @@ class EvidenceManager(wx.Frame):
         sizer.Add(self.info_list, 1, wx.EXPAND | wx.ALL, 5)
         panel.SetSizer(sizer)
         self.load_info_list(person_name)
+        if self.dark_mode:
+            panel.SetBackgroundColour(wx.Colour(45, 45, 45))
+            add_panel.SetBackgroundColour(wx.Colour(45, 45, 45))
+            self.info_type_ctrl.SetBackgroundColour(wx.Colour(45, 45, 45))
+            self.info_type_ctrl.SetForegroundColour(wx.Colour(230, 230, 230))
+            self.info_value_ctrl.SetBackgroundColour(wx.Colour(45, 45, 45))
+            self.info_value_ctrl.SetForegroundColour(wx.Colour(230, 230, 230))
         return panel
+
     def create_images_panel(self, parent, person_name):
         panel = wx.Panel(parent)
         sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        # Add image section
         add_panel = wx.Panel(panel)
         add_sizer = wx.BoxSizer(wx.HORIZONTAL)
         add_image_btn = wx.Button(add_panel, label="Add Image", size=(100, 30))
         add_image_btn.Bind(wx.EVT_BUTTON, lambda evt: self.on_add_image(person_name))
         add_sizer.Add(add_image_btn, 0, wx.ALL, 5)
         add_panel.SetSizer(add_sizer)
-        
-        # Images list
         self.images_list = wx.ListCtrl(panel, style=wx.LC_REPORT)
         self.images_list.InsertColumn(0, "Display Name", width=200)
         self.images_list.InsertColumn(1, "Filename", width=200)
         self.images_list.InsertColumn(2, "Actions", width=150)
-        
-        # Bind events
         self.images_list.Bind(wx.EVT_LIST_ITEM_RIGHT_CLICK, lambda evt: self.on_image_right_click(evt, person_name))
-        
         sizer.Add(add_panel, 0, wx.EXPAND | wx.ALL, 5)
         sizer.Add(self.images_list, 1, wx.EXPAND | wx.ALL, 5)
-        
         panel.SetSizer(sizer)
-        
-        # Load existing images
         self.load_images_list(person_name)
-        
+        if self.dark_mode:
+            panel.SetBackgroundColour(wx.Colour(45, 45, 45))
+            add_panel.SetBackgroundColour(wx.Colour(45, 45, 45))
         return panel
-        
+
     def create_audio_panel(self, parent, person_name):
         panel = wx.Panel(parent)
         sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        # Add audio section
         add_panel = wx.Panel(panel)
         add_sizer = wx.BoxSizer(wx.HORIZONTAL)
         add_audio_btn = wx.Button(add_panel, label="Add Audio", size=(100, 30))
         add_audio_btn.Bind(wx.EVT_BUTTON, lambda evt: self.on_add_audio(person_name))
         add_sizer.Add(add_audio_btn, 0, wx.ALL, 5)
         add_panel.SetSizer(add_sizer)
-        
-        # Audio list
         self.audio_list = wx.ListCtrl(panel, style=wx.LC_REPORT)
         self.audio_list.InsertColumn(0, "Display Name", width=200)
         self.audio_list.InsertColumn(1, "Filename", width=200)
         self.audio_list.InsertColumn(2, "Actions", width=150)
-        
-        # Bind events
         self.audio_list.Bind(wx.EVT_LIST_ITEM_RIGHT_CLICK, lambda evt: self.on_audio_right_click(evt, person_name))
-        
         sizer.Add(add_panel, 0, wx.EXPAND | wx.ALL, 5)
         sizer.Add(self.audio_list, 1, wx.EXPAND | wx.ALL, 5)
-        
         panel.SetSizer(sizer)
-        
-        # Load existing audio
         self.load_audio_list(person_name)
-        
+        if self.dark_mode:
+            panel.SetBackgroundColour(wx.Colour(45, 45, 45))
+            add_panel.SetBackgroundColour(wx.Colour(45, 45, 45))
         return panel
         
     def on_add_info(self, person_name):
@@ -312,7 +488,13 @@ class EvidenceManager(wx.Frame):
                     self.info_list.InsertItem(row, info_type)
                     self.info_list.SetItem(row, 1, value)
                     self.info_list.SetItem(row, 2, "Delete")
+                    if self.dark_mode:
+                        self.info_list.SetItemBackgroundColour(row, wx.Colour(40, 40, 40))
+                        self.info_list.SetItemTextColour(row, wx.Colour(230, 230, 230))
                     row += 1
+        if self.dark_mode:
+            self.info_list.SetBackgroundColour(wx.Colour(40, 40, 40))
+            self.info_list.SetForegroundColour(wx.Colour(230, 230, 230))
     def on_info_right_click(self, event, person_name):
         item = event.GetIndex()
         if item != wx.NOT_FOUND:
@@ -338,7 +520,24 @@ class EvidenceManager(wx.Frame):
         if dialog.ShowModal() == wx.ID_OK:
             new_value = dialog.GetValue().strip()
             if new_value and new_value != info_value:
-                self.delete_info_item(person_name, info_type, info_value)
+                # Remove the old value
+                if person_name in self.person_data and info_type in self.person_data[person_name]['info']:
+                    if info_value in self.person_data[person_name]['info'][info_type]:
+                        self.person_data[person_name]['info'][info_type].remove(info_value)
+                
+                # Ensure the info type exists
+                if person_name not in self.person_data:
+                    self.person_data[person_name] = {
+                        'name': person_name,
+                        'created': datetime.now().isoformat(),
+                        'info': {},
+                        'images': [],
+                        'audio': []
+                    }
+                if info_type not in self.person_data[person_name]['info']:
+                    self.person_data[person_name]['info'][info_type] = []
+                
+                # Add the new value
                 self.person_data[person_name]['info'][info_type].append(new_value)
                 self.save_person_data(person_name)
                 self.load_info_list(person_name)
@@ -390,7 +589,13 @@ class EvidenceManager(wx.Frame):
                 self.images_list.InsertItem(row, display_name)
                 self.images_list.SetItem(row, 1, filename)
                 self.images_list.SetItem(row, 2, "Open | Rename | Delete")
+                if self.dark_mode:
+                    self.images_list.SetItemBackgroundColour(row, wx.Colour(40, 40, 40))
+                    self.images_list.SetItemTextColour(row, wx.Colour(230, 230, 230))
                 row += 1
+        if self.dark_mode:
+            self.images_list.SetBackgroundColour(wx.Colour(40, 40, 40))
+            self.images_list.SetForegroundColour(wx.Colour(230, 230, 230))
     def on_image_right_click(self, event, person_name):
         item = event.GetIndex()
         if item != wx.NOT_FOUND:
@@ -508,7 +713,13 @@ class EvidenceManager(wx.Frame):
                 self.audio_list.InsertItem(row, display_name)
                 self.audio_list.SetItem(row, 1, filename)
                 self.audio_list.SetItem(row, 2, "Play | Rename | Delete")
+                if self.dark_mode:
+                    self.audio_list.SetItemBackgroundColour(row, wx.Colour(40, 40, 40))
+                    self.audio_list.SetItemTextColour(row, wx.Colour(230, 230, 230))
                 row += 1
+        if self.dark_mode:
+            self.audio_list.SetBackgroundColour(wx.Colour(40, 40, 40))
+            self.audio_list.SetForegroundColour(wx.Colour(230, 230, 230))
                 
     def on_audio_right_click(self, event, person_name):
         item = event.GetIndex()
@@ -582,7 +793,7 @@ class EvidenceManager(wx.Frame):
             self.load_audio_list(person_name)
             
     def on_export_evidence(self, person_name):
-        """Export person's evidence folder as a zip file"""
+        """Export person's evidence folder as an .ema file"""
         folder_name = person_name.replace(' ', '_')
         person_dir = os.path.join(self.evidence_dir, folder_name)
         
@@ -592,25 +803,38 @@ class EvidenceManager(wx.Frame):
             
         # Ask user for save location
         with wx.FileDialog(self, f"Export evidence for {person_name}", 
-                          wildcard="ZIP files (*.zip)|*.zip",
+                          wildcard="Evidence Manager Archive (*.ema)|*.ema",
                           style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as fileDialog:
             
             if fileDialog.ShowModal() == wx.ID_CANCEL:
                 return
                 
-            zip_path = fileDialog.GetPath()
+            ema_path = fileDialog.GetPath()
+            if not ema_path.endswith('.ema'):
+                ema_path += '.ema'
             
             try:
-                with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                    # Walk through the person's directory and add all files
+                with zipfile.ZipFile(ema_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                    # Add metadata to identify this as a single person export
+                    metadata = {
+                        'export_type': 'single_person',
+                        'person_name': person_name,
+                        'export_date': datetime.now().isoformat()
+                    }
+                    zipf.writestr('metadata.json', json.dumps(metadata, indent=2))
+                    
+                    # Create the same structure as all evidence export but with just one person
+                    # Walk through the person's directory and add all files with Evidence/Person_Name/ prefix
                     for root, dirs, files in os.walk(person_dir):
                         for file in files:
                             file_path = os.path.join(root, file)
-                            # Calculate relative path for the zip
-                            arcname = os.path.relpath(file_path, person_dir)
+                            # Calculate relative path from the person directory
+                            relative_path = os.path.relpath(file_path, person_dir)
+                            # Create the full archive path with Evidence/Person_Name/ prefix
+                            arcname = os.path.join('Evidence', folder_name, relative_path)
                             zipf.write(file_path, arcname)
                             
-                wx.MessageBox(f"Evidence exported successfully to:\n{zip_path}", 
+                wx.MessageBox(f"Evidence exported successfully to:\n{ema_path}", 
                             "Export Complete", wx.OK | wx.ICON_INFORMATION)
                             
             except Exception as e:
@@ -618,23 +842,33 @@ class EvidenceManager(wx.Frame):
                             "Export Error", wx.OK | wx.ICON_ERROR)
     
     def on_export_all_evidence(self, event):
-        """Export entire Evidence folder as a zip file"""
+        """Export entire Evidence folder as an .ema file"""
         if not os.path.exists(self.evidence_dir):
             wx.MessageBox("No Evidence folder found to export.", "Export Error", wx.OK | wx.ICON_ERROR)
             return
             
         # Ask user for save location
         with wx.FileDialog(self, "Export all evidence", 
-                          wildcard="ZIP files (*.zip)|*.zip",
+                          wildcard="Evidence Manager Archive (*.ema)|*.ema",
                           style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as fileDialog:
             
             if fileDialog.ShowModal() == wx.ID_CANCEL:
                 return
                 
-            zip_path = fileDialog.GetPath()
+            ema_path = fileDialog.GetPath()
+            if not ema_path.endswith('.ema'):
+                ema_path += '.ema'
             
             try:
-                with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                with zipfile.ZipFile(ema_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                    # Add metadata to identify this as an all evidence export
+                    metadata = {
+                        'export_type': 'all_evidence',
+                        'export_date': datetime.now().isoformat(),
+                        'person_count': len(self.person_data)
+                    }
+                    zipf.writestr('metadata.json', json.dumps(metadata, indent=2))
+                    
                     # Walk through the entire Evidence directory and add all files
                     for root, dirs, files in os.walk(self.evidence_dir):
                         for file in files:
@@ -643,13 +877,171 @@ class EvidenceManager(wx.Frame):
                             arcname = os.path.relpath(file_path, os.path.dirname(self.evidence_dir))
                             zipf.write(file_path, arcname)
                             
-                wx.MessageBox(f"All evidence exported successfully to:\n{zip_path}", 
+                wx.MessageBox(f"All evidence exported successfully to:\n{ema_path}", 
                             "Export Complete", wx.OK | wx.ICON_INFORMATION)
                             
             except Exception as e:
                 wx.MessageBox(f"Error exporting evidence: {str(e)}", 
                             "Export Error", wx.OK | wx.ICON_ERROR)
             
+    def on_import_evidence(self, event):
+        """Import evidence from an .ema file"""
+        with wx.FileDialog(self, "Import evidence", 
+                          wildcard="Evidence Manager Archive (*.ema)|*.ema",
+                          style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST) as fileDialog:
+            
+            if fileDialog.ShowModal() == wx.ID_CANCEL:
+                return
+                
+            ema_path = fileDialog.GetPath()
+            
+            try:
+                with zipfile.ZipFile(ema_path, 'r') as zipf:
+                    # Check if metadata exists
+                    if 'metadata.json' not in zipf.namelist():
+                        wx.MessageBox("Invalid .ema file: No metadata found.", "Import Error", wx.OK | wx.ICON_ERROR)
+                        return
+                    
+                    # Read metadata
+                    metadata_str = zipf.read('metadata.json').decode('utf-8')
+                    metadata = json.loads(metadata_str)
+                    export_type = metadata.get('export_type')
+                    
+                    if export_type == 'single_person':
+                        self.import_single_person(zipf, metadata)
+                    elif export_type == 'all_evidence':
+                        self.import_all_evidence(zipf, metadata)
+                    else:
+                        wx.MessageBox("Unknown export type in .ema file.", "Import Error", wx.OK | wx.ICON_ERROR)
+                        
+            except Exception as e:
+                wx.MessageBox(f"Error importing evidence: {str(e)}", "Import Error", wx.OK | wx.ICON_ERROR)
+    
+    def import_single_person(self, zipf, metadata):
+        """Import a single person's evidence"""
+        person_name = metadata.get('person_name')
+        if not person_name:
+            wx.MessageBox("Invalid .ema file: No person name in metadata.", "Import Error", wx.OK | wx.ICON_ERROR)
+            return
+        
+        # Check if person already exists
+        if person_name in self.person_data:
+            result = wx.MessageBox(f"Person '{person_name}' already exists. Overwrite?", 
+                                 "Confirm Import", wx.YES_NO | wx.ICON_QUESTION)
+            if result != wx.YES:
+                return
+        
+        try:
+            # Extract to temporary directory
+            import tempfile
+            with tempfile.TemporaryDirectory() as temp_dir:
+                zipf.extractall(temp_dir)
+                
+                # Look for the Evidence folder structure (same as all evidence import)
+                evidence_source = None
+                for item in os.listdir(temp_dir):
+                    item_path = os.path.join(temp_dir, item)
+                    if os.path.isdir(item_path) and item == 'Evidence':
+                        evidence_source = item_path
+                        break
+                
+                if not evidence_source:
+                    wx.MessageBox("Invalid .ema file: Could not find Evidence folder.", "Import Error", wx.OK | wx.ICON_ERROR)
+                    return
+                
+                # Find the person's folder inside Evidence
+                person_folders = [f for f in os.listdir(evidence_source) if os.path.isdir(os.path.join(evidence_source, f))]
+                
+                if len(person_folders) != 1:
+                    wx.MessageBox("Invalid .ema file: Could not find person folder in Evidence directory.", "Import Error", wx.OK | wx.ICON_ERROR)
+                    return
+                
+                person_folder = person_folders[0]
+                source_folder = os.path.join(evidence_source, person_folder)
+                target_folder = os.path.join(self.evidence_dir, person_folder)
+                
+                # Copy the folder
+                if os.path.exists(target_folder):
+                    shutil.rmtree(target_folder)
+                shutil.copytree(source_folder, target_folder)
+                
+                # Load the person data
+                data_file = os.path.join(target_folder, 'person_data.json')
+                if os.path.exists(data_file):
+                    with open(data_file, 'r', encoding='utf-8') as f:
+                        self.person_data[person_name] = json.load(f)
+                
+                wx.MessageBox(f"Successfully imported evidence for '{person_name}'", "Import Complete", wx.OK | wx.ICON_INFORMATION)
+                
+        except Exception as e:
+            wx.MessageBox(f"Error importing person evidence: {str(e)}", "Import Error", wx.OK | wx.ICON_ERROR)
+            return
+        
+        # Refresh the UI
+        self.update_person_list()
+    
+    def import_all_evidence(self, zipf, metadata):
+        """Import all evidence from an .ema file"""
+        result = wx.MessageBox("This will import all evidence from the archive. Continue?", 
+                             "Confirm Import", wx.YES_NO | wx.ICON_QUESTION)
+        if result != wx.YES:
+            return
+        
+        try:
+            # Extract to temporary directory
+            import tempfile
+            with tempfile.TemporaryDirectory() as temp_dir:
+                zipf.extractall(temp_dir)
+                
+                # Find the Evidence folder
+                evidence_source = None
+                for item in os.listdir(temp_dir):
+                    item_path = os.path.join(temp_dir, item)
+                    if os.path.isdir(item_path) and item == 'Evidence':
+                        evidence_source = item_path
+                        break
+                
+                if not evidence_source:
+                    wx.MessageBox("Invalid .ema file: Could not find Evidence folder.", "Import Error", wx.OK | wx.ICON_ERROR)
+                    return
+                
+                # Copy all person folders
+                imported_count = 0
+                for person_folder in os.listdir(evidence_source):
+                    person_source = os.path.join(evidence_source, person_folder)
+                    if os.path.isdir(person_source):
+                        person_target = os.path.join(self.evidence_dir, person_folder)
+                        
+                        # Check if person already exists
+                        person_name = person_folder.replace('_', ' ')
+                        if person_name in self.person_data:
+                            result = wx.MessageBox(f"Person '{person_name}' already exists. Overwrite?", 
+                                                 "Confirm Import", wx.YES_NO | wx.ICON_QUESTION)
+                            if result != wx.YES:
+                                continue
+                        
+                        # Copy the folder
+                        if os.path.exists(person_target):
+                            shutil.rmtree(person_target)
+                        shutil.copytree(person_source, person_target)
+                        
+                        # Load the person data
+                        data_file = os.path.join(person_target, 'person_data.json')
+                        if os.path.exists(data_file):
+                            with open(data_file, 'r', encoding='utf-8') as f:
+                                self.person_data[person_name] = json.load(f)
+                        
+                        imported_count += 1
+                
+                wx.MessageBox(f"Successfully imported {imported_count} people's evidence", "Import Complete", wx.OK | wx.ICON_INFORMATION)
+                
+        except Exception as e:
+            wx.MessageBox(f"Error importing all evidence: {str(e)}", "Import Error", wx.OK | wx.ICON_ERROR)
+            return
+        
+        # Refresh the UI
+        self.update_person_list()
+    
     def on_delete_person(self, person_name):
         if wx.MessageBox(f"Delete person '{person_name}' and all their evidence?", 
                         "Confirm Delete", wx.YES_NO | wx.ICON_WARNING) == wx.YES:
@@ -681,6 +1073,9 @@ class EvidenceManager(wx.Frame):
 def main():
     app = wx.App()
     frame = EvidenceManager()
+    # Only check for update if running as exe
+    if getattr(sys, 'frozen', False):
+        threading.Thread(target=check_for_update, args=(frame,), daemon=True).start()
     frame.Show()
     app.MainLoop()
 
