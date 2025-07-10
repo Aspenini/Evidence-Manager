@@ -17,7 +17,7 @@ import threading
 import requests
 import wx
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 GITHUB_REPO = "Aspenini/Evidence-Manager"
 GITHUB_API_RELEASES = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
