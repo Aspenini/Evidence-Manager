@@ -131,13 +131,19 @@ class EvidenceManager(wx.Frame):
                         try:
                             with open(data_file, 'r', encoding='utf-8') as f:
                                 self.person_data[person_name] = json.load(f)
+                                # Ensure backward compatibility - add missing fields
+                                if 'videos' not in self.person_data[person_name]:
+                                    self.person_data[person_name]['videos'] = []
+                                if 'audio' not in self.person_data[person_name]:
+                                    self.person_data[person_name]['audio'] = []
                         except:
                             self.person_data[person_name] = {
                                 'name': person_name,
                                 'created': datetime.now().isoformat(),
                                 'info': {},
                                 'images': [],
-                                'audio': []
+                                'audio': [],
+                                'videos': []
                             }
                     else:
                         self.person_data[person_name] = {
@@ -145,7 +151,8 @@ class EvidenceManager(wx.Frame):
                             'created': datetime.now().isoformat(),
                             'info': {},
                             'images': [],
-                            'audio': []
+                            'audio': [],
+                            'videos': []
                         }
     def init_ui(self):
         main_panel = wx.Panel(self)
@@ -217,12 +224,14 @@ class EvidenceManager(wx.Frame):
                     os.makedirs(person_dir)
                     os.makedirs(os.path.join(person_dir, 'images'))
                     os.makedirs(os.path.join(person_dir, 'audio'))
+                    os.makedirs(os.path.join(person_dir, 'videos'))
                 self.person_data[name] = {
                     'name': name,
                     'created': datetime.now().isoformat(),
                     'info': {},
                     'images': [],
-                    'audio': []
+                    'audio': [],
+                    'videos': []
                 }
                 self.save_person_data(name)
                 self.update_person_list()
@@ -260,6 +269,10 @@ class EvidenceManager(wx.Frame):
         # Audio tab
         audio_panel = self.create_audio_panel(notebook, person_name)
         notebook.AddPage(audio_panel, "Audio")
+        
+        # Video tab
+        video_panel = self.create_video_panel(notebook, person_name)
+        notebook.AddPage(video_panel, "Videos")
         self.right_sizer.Add(header_panel, 0, wx.EXPAND | wx.ALL, 5)
         self.right_sizer.Add(notebook, 1, wx.EXPAND | wx.ALL, 5)
         self.right_panel.Layout()
@@ -343,6 +356,29 @@ class EvidenceManager(wx.Frame):
             panel.SetBackgroundColour(wx.Colour(45, 45, 45))
             add_panel.SetBackgroundColour(wx.Colour(45, 45, 45))
         return panel
+
+    def create_video_panel(self, parent, person_name):
+        panel = wx.Panel(parent)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        add_panel = wx.Panel(panel)
+        add_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        add_video_btn = wx.Button(add_panel, label="Add Video", size=(100, 30))
+        add_video_btn.Bind(wx.EVT_BUTTON, lambda evt: self.on_add_video(person_name))
+        add_sizer.Add(add_video_btn, 0, wx.ALL, 5)
+        add_panel.SetSizer(add_sizer)
+        self.video_list = wx.ListCtrl(panel, style=wx.LC_REPORT)
+        self.video_list.InsertColumn(0, "Display Name", width=200)
+        self.video_list.InsertColumn(1, "Filename", width=200)
+        self.video_list.InsertColumn(2, "Actions", width=150)
+        self.video_list.Bind(wx.EVT_LIST_ITEM_RIGHT_CLICK, lambda evt: self.on_video_right_click(evt, person_name))
+        sizer.Add(add_panel, 0, wx.EXPAND | wx.ALL, 5)
+        sizer.Add(self.video_list, 1, wx.EXPAND | wx.ALL, 5)
+        panel.SetSizer(sizer)
+        self.load_video_list(person_name)
+        if self.dark_mode:
+            panel.SetBackgroundColour(wx.Colour(45, 45, 45))
+            add_panel.SetBackgroundColour(wx.Colour(45, 45, 45))
+        return panel
         
     def on_add_info(self, person_name):
         info_type = self.info_type_ctrl.GetValue().strip()
@@ -353,7 +389,9 @@ class EvidenceManager(wx.Frame):
                     'name': person_name,
                     'created': datetime.now().isoformat(),
                     'info': {},
-                    'images': []
+                    'images': [],
+                    'audio': [],
+                    'videos': []
                 }
             if info_type not in self.person_data[person_name]['info']:
                 self.person_data[person_name]['info'][info_type] = []
@@ -415,7 +453,8 @@ class EvidenceManager(wx.Frame):
                         'created': datetime.now().isoformat(),
                         'info': {},
                         'images': [],
-                        'audio': []
+                        'audio': [],
+                        'videos': []
                     }
                 if info_type not in self.person_data[person_name]['info']:
                     self.person_data[person_name]['info'][info_type] = []
@@ -446,7 +485,9 @@ class EvidenceManager(wx.Frame):
                     'name': person_name,
                     'created': datetime.now().isoformat(),
                     'info': {},
-                    'images': []
+                    'images': [],
+                    'audio': [],
+                    'videos': []
                 }
             if filename not in self.person_data[person_name]['images']:
                 # Store as dict with display name and filename
@@ -674,6 +715,143 @@ class EvidenceManager(wx.Frame):
             
             # Reload audio
             self.load_audio_list(person_name)
+            
+    def on_add_video(self, person_name):
+        with wx.FileDialog(self, "Select video file", wildcard="Video files (*.mp4;*.avi;*.mov;*.wmv;*.flv;*.mkv;*.webm)|*.mp4;*.avi;*.mov;*.wmv;*.flv;*.mkv;*.webm",
+                          style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST) as fileDialog:
+            if fileDialog.ShowModal() == wx.ID_CANCEL:
+                return
+            filepath = fileDialog.GetPath()
+            filename = os.path.basename(filepath)
+            folder_name = person_name.replace(' ', '_')
+            person_dir = os.path.join(self.evidence_dir, folder_name)
+            videos_dir = os.path.join(person_dir, 'videos')
+            if not os.path.exists(person_dir):
+                os.makedirs(person_dir)
+            if not os.path.exists(videos_dir):
+                os.makedirs(videos_dir)
+            dest_path = os.path.join(videos_dir, filename)
+            shutil.copy2(filepath, dest_path)
+            if person_name not in self.person_data:
+                self.person_data[person_name] = {
+                    'name': person_name,
+                    'created': datetime.now().isoformat(),
+                    'info': {},
+                    'images': [],
+                    'audio': [],
+                    'videos': []
+                }
+            # Ensure videos array exists (for backward compatibility)
+            if 'videos' not in self.person_data[person_name]:
+                self.person_data[person_name]['videos'] = []
+            # Store as dict with display name and filename
+            video_data = {
+                'display_name': os.path.splitext(filename)[0],  # filename without extension
+                'filename': filename
+            }
+            self.person_data[person_name]['videos'].append(video_data)
+            self.save_person_data(person_name)
+            self.load_video_list(person_name)
+            
+    def load_video_list(self, person_name):
+        self.video_list.DeleteAllItems()
+        if person_name in self.person_data:
+            row = 0
+            for video_data in self.person_data[person_name].get('videos', []):
+                if isinstance(video_data, dict):
+                    display_name = video_data.get('display_name', '')
+                    filename = video_data.get('filename', '')
+                else:
+                    # Handle old format (just filename string)
+                    filename = video_data
+                    display_name = os.path.splitext(filename)[0]
+                self.video_list.InsertItem(row, display_name)
+                self.video_list.SetItem(row, 1, filename)
+                self.video_list.SetItem(row, 2, "Play | Rename | Delete")
+                if self.dark_mode:
+                    self.video_list.SetItemBackgroundColour(row, wx.Colour(40, 40, 40))
+                    self.video_list.SetItemTextColour(row, wx.Colour(230, 230, 230))
+                row += 1
+        if self.dark_mode:
+            self.video_list.SetBackgroundColour(wx.Colour(40, 40, 40))
+            self.video_list.SetForegroundColour(wx.Colour(230, 230, 230))
+                
+    def on_video_right_click(self, event, person_name):
+        item = event.GetIndex()
+        if item != wx.NOT_FOUND:
+            display_name = self.video_list.GetItem(item, 0).GetText()
+            filename = self.video_list.GetItem(item, 1).GetText()
+            
+            menu = wx.Menu()
+            play_item = menu.Append(wx.ID_ANY, "Play Video")
+            rename_item = menu.Append(wx.ID_ANY, "Rename")
+            delete_item = menu.Append(wx.ID_ANY, "Delete")
+            
+            self.Bind(wx.EVT_MENU, lambda evt: self.play_video_file(person_name, filename), play_item)
+            self.Bind(wx.EVT_MENU, lambda evt: self.rename_video(person_name, display_name, filename, item), rename_item)
+            self.Bind(wx.EVT_MENU, lambda evt: self.delete_video(person_name, filename), delete_item)
+            
+            self.PopupMenu(menu)
+            menu.Destroy()
+            
+    def play_video_file(self, person_name, filename):
+        folder_name = person_name.replace(' ', '_')
+        video_path = os.path.join(self.evidence_dir, folder_name, 'videos', filename)
+        try:
+            os.startfile(video_path)
+        except:
+            wx.MessageBox(f"Could not play video: {video_path}", "Error", wx.OK | wx.ICON_ERROR)
+            
+    def rename_video(self, person_name, current_display_name, filename, item):
+        dialog = wx.TextEntryDialog(self, "Enter new display name:", "Rename Video", current_display_name)
+        if dialog.ShowModal() == wx.ID_OK:
+            new_display_name = dialog.GetValue().strip()
+            if new_display_name and new_display_name != current_display_name:
+                # Ensure videos array exists (for backward compatibility)
+                if 'videos' not in self.person_data[person_name]:
+                    self.person_data[person_name]['videos'] = []
+                # Update the video data
+                for video_data in self.person_data[person_name]['videos']:
+                    if isinstance(video_data, dict) and video_data.get('filename') == filename:
+                        video_data['display_name'] = new_display_name
+                        break
+                    elif video_data == filename:  # Handle old format
+                        # Convert to new format
+                        idx = self.person_data[person_name]['videos'].index(video_data)
+                        self.person_data[person_name]['videos'][idx] = {
+                            'display_name': new_display_name,
+                            'filename': filename
+                        }
+                        break
+                self.save_person_data(person_name)
+                self.load_video_list(person_name)
+        dialog.Destroy()
+        
+    def delete_video(self, person_name, filename):
+        if wx.MessageBox(f"Delete video '{filename}'?", "Confirm Delete", 
+                        wx.YES_NO | wx.ICON_QUESTION) == wx.YES:
+            # Remove from person data
+            if person_name in self.person_data:
+                # Ensure videos array exists (for backward compatibility)
+                if 'videos' not in self.person_data[person_name]:
+                    self.person_data[person_name]['videos'] = []
+                for i, video_data in enumerate(self.person_data[person_name]['videos']):
+                    if isinstance(video_data, dict) and video_data.get('filename') == filename:
+                        del self.person_data[person_name]['videos'][i]
+                        break
+                    elif video_data == filename:  # Handle old format
+                        self.person_data[person_name]['videos'].remove(filename)
+                        break
+                self.save_person_data(person_name)
+            
+            # Delete file
+            folder_name = person_name.replace(' ', '_')
+            video_path = os.path.join(self.evidence_dir, folder_name, 'videos', filename)
+            if os.path.exists(video_path):
+                os.remove(video_path)
+            
+            # Reload videos
+            self.load_video_list(person_name)
             
     def on_export_evidence(self, person_name):
         """Export person's evidence folder as an .ema file"""

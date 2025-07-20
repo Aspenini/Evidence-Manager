@@ -7,6 +7,8 @@ A comprehensive evidence management application built with Python and wxPython f
 - **Person Management**: Add, view, and delete people from your evidence database
 - **Information Organization**: Store various types of information (usernames, addresses, phone numbers, etc.) for each person
 - **Image Management**: Add and organize images with thumbnail previews
+- **Audio Management**: Add and organize audio files with playback support
+- **Video Management**: Add and organize video files with playback support
 - **Auto-Organization**: Automatically creates folder structure and organizes data
 - **Clean Interface**: Modern, intuitive GUI with tabbed interface
 - **Data Persistence**: All data is saved in JSON format and organized in folders
@@ -51,8 +53,25 @@ A comprehensive evidence management application built with Python and wxPython f
 
 1. **Select the "Images" tab** when viewing a person
 2. **Add Images**: Click "Add Image" and select image files (supports PNG, JPG, JPEG, GIF, BMP)
-3. **View Images**: Double-click on any thumbnail to open the image in your default viewer
-4. **Delete Images**: Click the "Delete" button below any image
+3. **View Images**: Right-click on any image and select "Open Image"
+4. **Rename Images**: Right-click on any image and select "Rename"
+5. **Delete Images**: Right-click on any image and select "Delete"
+
+### Audio Management
+
+1. **Select the "Audio" tab** when viewing a person
+2. **Add Audio**: Click "Add Audio" and select audio files (supports MP3, WAV, M4A, AAC, OGG)
+3. **Play Audio**: Right-click on any audio file and select "Play Audio"
+4. **Rename Audio**: Right-click on any audio file and select "Rename"
+5. **Delete Audio**: Right-click on any audio file and select "Delete"
+
+### Video Management
+
+1. **Select the "Videos" tab** when viewing a person
+2. **Add Videos**: Click "Add Video" and select video files (supports MP4, AVI, MOV, WMV, FLV, MKV, WEBM)
+3. **Play Videos**: Right-click on any video file and select "Play Video"
+4. **Rename Videos**: Right-click on any video file and select "Rename"
+5. **Delete Videos**: Right-click on any video file and select "Delete"
 
 ### Data Organization
 
@@ -62,13 +81,19 @@ The application automatically organizes data as follows:
 Evidence/
 ├── Person_Name_1/
 │   ├── person_data.json
-│   └── images/
-│       ├── image1.jpg
-│       └── image2.png
+│   ├── images/
+│   │   ├── image1.jpg
+│   │   └── image2.png
+│   ├── audio/
+│   │   └── recording1.mp3
+│   └── videos/
+│       └── video1.mp4
 ├── Person_Name_2/
 │   ├── person_data.json
-│   └── images/
-│       └── image3.gif
+│   ├── images/
+│   │   └── image3.gif
+│   ├── audio/
+│   └── videos/
 ```
 
 - **Folder Names**: Person names with spaces replaced by underscores
@@ -81,12 +106,29 @@ Evidence/
 - `requirements.txt` - Python dependencies
 - `Evidence/` - Auto-created folder containing all evidence data
 
-## Supported Image Formats
+## Supported File Formats
 
+### Images
 - PNG
 - JPG/JPEG
 - GIF
 - BMP
+
+### Audio
+- MP3
+- WAV
+- M4A
+- AAC
+- OGG
+
+### Video
+- MP4
+- AVI
+- MOV
+- WMV
+- FLV
+- MKV
+- WEBM
 
 ## Data Format
 
@@ -101,7 +143,9 @@ Each person's data is stored in JSON format with the following structure:
     "Address": ["123 Main St"],
     "Phone Number": ["555-1234"]
   },
-  "images": ["image1.jpg", "image2.png"]
+  "images": [{"display_name": "Image1", "filename": "image1.jpg"}],
+  "audio": [{"display_name": "Recording1", "filename": "recording1.mp3"}],
+  "videos": [{"display_name": "Video1", "filename": "video1.mp4"}]
 }
 ```
 
