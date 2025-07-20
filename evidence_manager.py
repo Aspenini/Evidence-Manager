@@ -862,10 +862,15 @@ class EvidenceManager(wx.Frame):
             wx.MessageBox(f"No evidence folder found for {person_name}", "Export Error", wx.OK | wx.ICON_ERROR)
             return
             
+        # Generate filename from person name (lowercase, spaces to hyphens)
+        safe_filename = person_name.lower().replace(' ', '-')
+        default_filename = f"{safe_filename}.ema"
+        
         # Ask user for save location
         with wx.FileDialog(self, f"Export evidence for {person_name}", 
                           wildcard="Evidence Manager Archive (*.ema)|*.ema",
-                          style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as fileDialog:
+                          style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
+                          defaultFile=default_filename) as fileDialog:
             
             if fileDialog.ShowModal() == wx.ID_CANCEL:
                 return
