@@ -178,7 +178,7 @@ class EvidenceManager(wx.Frame):
         export_all_btn.Bind(wx.EVT_BUTTON, self.on_export_all_evidence)
         
         # Dark mode toggle button
-        dark_mode_btn = wx.Button(buttons_panel, label="🌙 Dark Mode" if not self.dark_mode else "☀️ Light Mode", size=(100, 30))
+        dark_mode_btn = wx.Button(buttons_panel, label="🌙 Dark Mode" if not self.dark_mode else "☀️ Light Mode", size=(120, 30))
         dark_mode_btn.Bind(wx.EVT_BUTTON, self.toggle_dark_mode)
         self.dark_mode_btn = dark_mode_btn  # Store reference for updating text
         
