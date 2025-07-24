@@ -1,6 +1,6 @@
 # Evidence Manager
 
-A comprehensive evidence management application built with Python and PyQT6 for organizing and tracking evidence related to people.
+A comprehensive evidence management application built with Python and wxPython for organizing and tracking evidence related to people.
 
 ## Features
 
@@ -161,3 +161,9 @@ Each person's data is stored in JSON format with the following structure:
 - **Missing Dependencies**: Run `pip install -r requirements.txt`
 - **Permission Errors**: Ensure you have write permissions in the application directory
 - **Image Loading Issues**: Check that image files are not corrupted and are in supported formats
+
+## Requirements
+
+- Python 3.6+
+- wxPython 4.2.1
+- Pillow 10.0.1 
