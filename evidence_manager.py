@@ -853,7 +853,7 @@ class EvidenceManagerPyQt(QMainWindow):
         if not self.store.root.exists():
             QMessageBox.critical(self, "Export Error", "No Evidence folder found to export.")
             return
-        out, _ = QFileDialog.getSaveFileName(self, "Export all evidence", "", "Evidence Manager Archive (*.ema)")
+        out, _ = QFileDialog.getSaveFileName(self, "Export all evidence", "all-evidence.ema", "Evidence Manager Archive (*.ema)")
         if not out:
             return
         if not out.endswith(".ema"):
