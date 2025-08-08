@@ -1,0 +1,64 @@
+name: Build and Release (Windows)
+
+on:
+  push:
+    branches: [ master ]
+    tags: [ 'v*' ]
+  pull_request:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build with PyInstaller
+        shell: pwsh
+        run: |
+          python -m PyInstaller `
+            --onefile `
+            --windowed `
+            --name "Evidence Manager" `
+            --icon icon.ico `
+            --hidden-import PyQt6.sip `
+            --collect-submodules PyQt6 `
+            --collect-data PyQt6 `
+            --collect-data PIL `
+            evidence_manager.py
+
+      - name: Package portable zip
+        shell: pwsh
+        run: |
+          Rename-Item "dist\Evidence Manager.exe" "Evidence-Manager.exe"
+          Compress-Archive -Path "dist\Evidence-Manager.exe" -DestinationPath "dist\Evidence-Manager-Windows-Portable.zip" -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Evidence-Manager-Windows-Portable
+          path: dist/Evidence-Manager-Windows-Portable.zip
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          prerelease: false
+          files: |
+            dist/Evidence-Manager-Windows-Portable.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+
