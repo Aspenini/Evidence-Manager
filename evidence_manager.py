@@ -269,6 +269,7 @@ class EvidenceStore:
 class WorkerSignals(QObject):
     finished = pyqtSignal()
     error = pyqtSignal(str)
+    result = pyqtSignal(object)
 
 
 class CallableWorker(QRunnable):
@@ -281,7 +282,12 @@ class CallableWorker(QRunnable):
 
     def run(self):
         try:
-            self.fn(*self.args, **self.kwargs)
+            result = self.fn(*self.args, **self.kwargs)
+            # Emit result payload (can be None)
+            try:
+                self.signals.result.emit(result)
+            except Exception:
+                pass
             self.signals.finished.emit()
         except Exception as e:
             self.signals.error.emit(str(e))
@@ -504,33 +510,16 @@ class EvidenceManagerPyQt(QMainWindow):
         def work():
             rel = self._latest_release()
             if not rel:
-                if not silent:
-                    raise RuntimeError("Unable to contact update server")
-                return
+                return {"status": "no-conn"}
             latest_tag = rel.get("tag_name") or rel.get("name") or ""
             latest_ver = self._parse_version(latest_tag)
             current_ver = self._parse_version(__version__)
             if latest_ver <= current_ver:
-                if not silent:
-                    QMessageBox.information(self, "Update", "You are on the latest version.")
-                return
-            if QMessageBox.question(
-                self,
-                "Update Available",
-                f"A newer version {latest_tag} is available (current {__version__}).\nDownload and install now?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            ) != QMessageBox.StandardButton.Yes:
-                return
+                return {"status": "up-to-date"}
             url = self._asset_download_url(rel)
             if not url:
-                raise RuntimeError("No Windows installer found in latest release")
-            with urllib.request.urlopen(url, timeout=60) as r:
-                data = r.read()
-            tmp_dir = Path(tempfile.mkdtemp(prefix="evm_update_"))
-            installer = tmp_dir / Path(url).name
-            installer.write_bytes(data)
-            # Launch installer; user runs it to update, we do not self-overwrite running exe
-            self.store.open_path(installer)
+                return {"status": "no-asset", "latest_tag": latest_tag}
+            return {"status": "update", "latest_tag": latest_tag, "url": url}
 
         pd = QProgressDialog("Checking for updates...", None, 0, 0, self)
         pd.setWindowModality(Qt.WindowModality.ApplicationModal)
@@ -538,6 +527,47 @@ class EvidenceManagerPyQt(QMainWindow):
             pd.setMinimumDuration(0)
             pd.show()
         worker = CallableWorker(work)
+        def on_result(res):
+            if not isinstance(res, dict):
+                return
+            status = res.get("status")
+            if status == "up-to-date":
+                if not silent:
+                    QMessageBox.information(self, "Update", "You are on the latest version.")
+            elif status == "no-conn":
+                if not silent:
+                    QMessageBox.warning(self, "Update", "Unable to contact update server.")
+            elif status == "no-asset":
+                if not silent:
+                    QMessageBox.warning(self, "Update", f"No Windows installer found for {res.get('latest_tag','latest')}.")
+            elif status == "update":
+                latest_tag = res.get("latest_tag", "")
+                url = res.get("url", "")
+                if QMessageBox.question(
+                    self,
+                    "Update Available",
+                    f"A newer version {latest_tag} is available (current {__version__}).\nDownload now?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                ) == QMessageBox.StandardButton.Yes:
+                    # Do the download in another worker to keep UI thread safe
+                    def download_and_open():
+                        with urllib.request.urlopen(url, timeout=120) as r:
+                            data = r.read()
+                        tmp_dir = Path(tempfile.mkdtemp(prefix="evm_update_"))
+                        asset = tmp_dir / Path(url).name
+                        asset.write_bytes(data)
+                        return str(asset)
+                    pd2 = QProgressDialog("Downloading update...", None, 0, 0, self)
+                    pd2.setWindowModality(Qt.WindowModality.ApplicationModal)
+                    pd2.setMinimumDuration(0)
+                    w2 = CallableWorker(download_and_open)
+                    w2.signals.result.connect(lambda p: self.store.open_path(Path(p)))
+                    w2.signals.finished.connect(pd2.close)
+                    w2.signals.error.connect(lambda e: QMessageBox.critical(self, "Update", e))
+                    self.thread_pool.start(w2)
+                    pd2.show()
+
+        worker.signals.result.connect(on_result)
         worker.signals.error.connect(lambda e: (pd.close(), None) if silent else QMessageBox.critical(self, "Update", str(e)))
         worker.signals.finished.connect(pd.close)
         self.thread_pool.start(worker)
