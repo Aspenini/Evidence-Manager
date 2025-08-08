@@ -22,6 +22,10 @@ from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+import json as _json  # for safe dumps inside updater
+import urllib.request
+import urllib.error
+import re
 
 from PyQt6.QtWidgets import (
     QApplication,
@@ -48,6 +52,9 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QThreadPool, QRunnable, QObject, pyqtSignal, QSize
 from PyQt6.QtGui import QFont, QIcon, QPixmap
 from PIL import Image
+
+# Application version
+__version__ = "2.0.0"
 
 
 # ---------------------------
@@ -330,12 +337,15 @@ class EvidenceManagerPyQt(QMainWindow):
         import_btn.clicked.connect(self.on_import)
         export_all_btn = QPushButton("Export All")
         export_all_btn.clicked.connect(self.on_export_all)
+        update_btn = QPushButton("Check Updates")
+        update_btn.clicked.connect(self.check_for_updates)
         self.dark_mode_btn = QPushButton("🌙 Dark Mode" if not self.dark_mode else "☀️ Light Mode")
         self.dark_mode_btn.clicked.connect(self.toggle_dark_mode)
 
         header_layout.addWidget(add_btn)
         header_layout.addWidget(import_btn)
         header_layout.addWidget(export_all_btn)
+        header_layout.addWidget(update_btn)
         header_layout.addWidget(self.dark_mode_btn)
         left_layout.addLayout(header_layout)
 
@@ -358,6 +368,11 @@ class EvidenceManagerPyQt(QMainWindow):
 
         self.apply_theme()
         self.refresh_person_list()
+        # Auto check updates silently
+        try:
+            self._check_updates_async(silent=True)
+        except Exception:
+            pass
 
     # ----- Settings / Theme -----
     def load_settings(self):
@@ -365,8 +380,10 @@ class EvidenceManagerPyQt(QMainWindow):
             if self.settings_file.exists():
                 data = json.loads(self.settings_file.read_text(encoding="utf-8"))
                 self.dark_mode = bool(data.get("dark_mode", False))
+                self.auto_update = bool(data.get("auto_update", True))
         except Exception:
             self.dark_mode = False
+            self.auto_update = True
 
     def save_settings(self):
         tmp_path = None
@@ -377,7 +394,7 @@ class EvidenceManagerPyQt(QMainWindow):
                 dir=str(self.settings_file.parent)
             )
             with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
-                json.dump({"dark_mode": self.dark_mode}, f, indent=2)
+                json.dump({"dark_mode": self.dark_mode, "auto_update": getattr(self, "auto_update", True)}, f, indent=2)
             os.replace(tmp_path, self.settings_file)
         finally:
             try:
@@ -444,6 +461,86 @@ class EvidenceManagerPyQt(QMainWindow):
             )
         if hasattr(self, "dark_mode_btn"):
             self.dark_mode_btn.setText("🌙 Dark Mode" if not self.dark_mode else "☀️ Light Mode")
+        
+    # ----- Updates -----
+    @property
+    def update_repo(self) -> str:
+        # GitHub repo for updates
+        return "Aspenini/Evidence-Manager"
+
+    def _latest_release(self) -> Optional[dict]:
+        url = f"https://api.github.com/repos/{self.update_repo}/releases/latest"
+        req = urllib.request.Request(url, headers={"User-Agent": "EvidenceManager-Updater"})
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                if resp.status == 200:
+                    return json.loads(resp.read().decode("utf-8"))
+        except Exception:
+            return None
+        return None
+
+    def _parse_version(self, s: str) -> Tuple[int, int, int]:
+        m = re.search(r"(\\d+)\\.(\\d+)\\.(\\d+)", s)
+        if not m:
+            return (0, 0, 0)
+        return (int(m.group(1)), int(m.group(2)), int(m.group(3)))
+
+    def _asset_download_url(self, release: dict) -> Optional[str]:
+        # Prefer a Windows portable zip; fallback to exe
+        for asset in release.get("assets", []):
+            name = asset.get("name", "").lower()
+            if name.endswith("windows-portable.zip"):
+                return asset.get("browser_download_url")
+        for asset in release.get("assets", []):
+            name = asset.get("name", "").lower()
+            if name.endswith(".exe"):
+                return asset.get("browser_download_url")
+        return None
+
+    def check_for_updates(self):
+        self._check_updates_async(silent=False)
+
+    def _check_updates_async(self, silent: bool):
+        def work():
+            rel = self._latest_release()
+            if not rel:
+                if not silent:
+                    raise RuntimeError("Unable to contact update server")
+                return
+            latest_tag = rel.get("tag_name") or rel.get("name") or ""
+            latest_ver = self._parse_version(latest_tag)
+            current_ver = self._parse_version(__version__)
+            if latest_ver <= current_ver:
+                if not silent:
+                    QMessageBox.information(self, "Update", "You are on the latest version.")
+                return
+            if QMessageBox.question(
+                self,
+                "Update Available",
+                f"A newer version {latest_tag} is available (current {__version__}).\nDownload and install now?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            ) != QMessageBox.StandardButton.Yes:
+                return
+            url = self._asset_download_url(rel)
+            if not url:
+                raise RuntimeError("No Windows installer found in latest release")
+            with urllib.request.urlopen(url, timeout=60) as r:
+                data = r.read()
+            tmp_dir = Path(tempfile.mkdtemp(prefix="evm_update_"))
+            installer = tmp_dir / Path(url).name
+            installer.write_bytes(data)
+            # Launch installer; user runs it to update, we do not self-overwrite running exe
+            self.store.open_path(installer)
+
+        pd = QProgressDialog("Checking for updates...", None, 0, 0, self)
+        pd.setWindowModality(Qt.WindowModality.ApplicationModal)
+        if not silent:
+            pd.setMinimumDuration(0)
+            pd.show()
+        worker = CallableWorker(work)
+        worker.signals.error.connect(lambda e: (pd.close(), None) if silent else QMessageBox.critical(self, "Update", str(e)))
+        worker.signals.finished.connect(pd.close)
+        self.thread_pool.start(worker)
 
     def toggle_dark_mode(self):
         self.dark_mode = not self.dark_mode
