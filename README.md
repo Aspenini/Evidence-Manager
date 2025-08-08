@@ -1,6 +1,6 @@
 # Evidence Manager
 
-A comprehensive evidence management application built with Python and PyQT6 for organizing and tracking evidence related to people.
+A comprehensive evidence management application built with Python and PyQt6 for organizing and tracking evidence related to people.
 
 ## Features
 
@@ -12,6 +12,14 @@ A comprehensive evidence management application built with Python and PyQT6 for 
 - **Auto-Organization**: Automatically creates folder structure and organizes data
 - **Clean Interface**: Modern, intuitive GUI with tabbed interface
 - **Data Persistence**: All data is saved in JSON format and organized in folders
+
+## Improvements (Refactor)
+
+- Non-blocking import/export and file copy operations to prevent UI freezes
+- Safer, atomic JSON writes for settings and person data to avoid corruption
+- Image thumbnail generation and caching for fast loading in tables
+- Deduplicated media handling for images, audio, and videos (less code, fewer bugs)
+- More defensive error handling and cross-platform open/play support
 
 ## Installation
 

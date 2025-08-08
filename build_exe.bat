@@ -42,10 +42,13 @@ echo Building executable...
 echo.
 
 REM Build the executable with icon if available
+REM Include PyQt6 sip and collect all PyQt6/PIL submodules and data to avoid runtime import errors
+set PYI_COMMON_OPTS=--onefile --windowed --name="Evidence Manager" --hidden-import PyQt6.sip --collect-submodules PyQt6 --collect-data PyQt6 --collect-data PIL
+
 if exist "icon.ico" (
-    pyinstaller --onefile --windowed --name="Evidence Manager" --icon=icon.ico evidence_manager.py
+    pyinstaller %PYI_COMMON_OPTS% --icon=icon.ico evidence_manager.py
 ) else (
-    pyinstaller --onefile --windowed --name="Evidence Manager" evidence_manager.py
+    pyinstaller %PYI_COMMON_OPTS% evidence_manager.py
 )
 
 if errorlevel 1 (

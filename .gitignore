@@ -3,3 +3,6 @@
 /Output
 *.spec
 *.json
+/__pycache__
+/venv
+/Evidence
