@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["EvidenceType"],"struct":["EvidenceFile","Person","PersonInfo","Quote"]};
