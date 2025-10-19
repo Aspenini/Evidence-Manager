@@ -29,13 +29,13 @@ jobs:
 
       # Optional: ensure Jekyll doesn't change static files
       - name: Add .nojekyll
-        run: touch docs/.nojekyll
+        run: touch site/.nojekyll
 
       - name: Upload artifact (docs/)
         uses: actions/upload-pages-artifact@v3
         with:
           # path relative to the repo root
-          path: docs
+          path: site
 
       - name: Deploy to GitHub Pages
         id: deployment
