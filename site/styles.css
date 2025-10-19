@@ -280,6 +280,17 @@ p {
     flex-grow: 1;
 }
 
+.version-info {
+    color: #60a5fa !important;
+    font-weight: 500;
+    font-size: 0.9rem;
+    margin-bottom: 1rem !important;
+    background: rgba(96, 165, 250, 0.1);
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    border: 1px solid rgba(96, 165, 250, 0.2);
+}
+
 .download-btn {
     width: 100%;
     margin-top: auto;
