@@ -1,8 +1,6 @@
 name: Build — Windows / macOS (x64+arm64) / Linux (.AppImage + .deb)
 
 on:
-  push:
-  pull_request:
   workflow_dispatch:
 
 permissions:
