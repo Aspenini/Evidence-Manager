@@ -1,4 +1,4 @@
-name: Build — Windows / macOS (x64+arm64) / Linux (.AppImage + .deb)
+name: Build Evidence Manager
 
 on:
   workflow_dispatch:
