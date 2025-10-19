@@ -35,38 +35,7 @@
                 </div>
                 <div class="hero-image">
                     <div class="app-preview">
-                        <div class="app-window">
-                            <div class="app-header">
-                                <div class="app-controls">
-                                    <span class="control red"></span>
-                                    <span class="control yellow"></span>
-                                    <span class="control green"></span>
-                                </div>
-                                <div class="app-title">Evidence Manager</div>
-                            </div>
-                            <div class="app-content">
-                                <div class="sidebar-preview">
-                                    <div class="sidebar-item active">John Smith</div>
-                                    <div class="sidebar-item">Jane Doe</div>
-                                    <div class="sidebar-item">Mike Johnson</div>
-                                </div>
-                                <div class="main-preview">
-                                    <div class="tab-bar">
-                                        <div class="tab active">Information</div>
-                                        <div class="tab">Images</div>
-                                        <div class="tab">Audio</div>
-                                    </div>
-                                    <div class="content-area">
-                                        <div class="info-item">
-                                            <strong>Phone:</strong> +1 (555) 123-4567
-                                        </div>
-                                        <div class="info-item">
-                                            <strong>Email:</strong> john@example.com
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        <img src="img/screenshot.png" alt="Evidence Manager Screenshot" class="screenshot" onclick="openModal()">
                     </div>
                 </div>
             </div>
@@ -159,5 +128,32 @@
             </div>
         </div>
     </footer>
+
+    <!-- Image Modal -->
+    <div id="imageModal" class="modal" onclick="closeModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <img src="img/screenshot.png" alt="Evidence Manager Screenshot" class="modal-image">
+        </div>
+    </div>
+
+    <script>
+        function openModal() {
+            document.getElementById('imageModal').style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() {
+            document.getElementById('imageModal').style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+
+        // Close modal when pressing Escape key
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeModal();
+            }
+        });
+    </script>
 </body>
 </html>
