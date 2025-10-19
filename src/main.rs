@@ -1,22 +1,19 @@
-mod app;
 mod models;
 mod file_manager;
 mod export_import;
+mod state;
+mod gui;
 
-use eframe::egui;
-use app::EvidenceManagerApp;
+use iced::{Application, Settings};
+use state::AppState;
 
-fn main() -> Result<(), eframe::Error> {
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1200.0, 800.0])
-            .with_min_inner_size([800.0, 600.0]),
+fn main() -> iced::Result {
+    AppState::run(Settings {
+        window: iced::window::Settings {
+            size: iced::Size::new(1200.0, 800.0),
+            min_size: Some(iced::Size::new(800.0, 600.0)),
+            ..Default::default()
+        },
         ..Default::default()
-    };
-
-    eframe::run_native(
-        "Evidence Manager",
-        options,
-        Box::new(|_cc| Ok(Box::new(EvidenceManagerApp::new()))),
-    )
+    })
 }

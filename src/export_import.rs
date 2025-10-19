@@ -7,6 +7,7 @@ use zip::ZipWriter;
 use zip::write::FileOptions;
 use std::io::{Read, Write};
 
+#[derive(Clone)]
 pub struct ExportImportManager {
     file_manager: FileManager,
 }
@@ -112,7 +113,7 @@ impl ExportImportManager {
                 .context("Failed to write extracted file")?;
         }
         
-        // Now load all persons from the extracted data
+        // Now load all persons from the extracted data and ensure all subdirectories exist
         for entry in fs::read_dir(&evidence_dir)
             .context("Failed to read Evidence directory")?
         {
@@ -121,12 +122,30 @@ impl ExportImportManager {
 
             if path.is_dir() && path.file_name().and_then(|n| n.to_str()).map(|s| s != ".").unwrap_or(false) {
                 if let Ok(person) = self.file_manager.load_person_data(&path) {
+                    // Ensure all required subdirectories exist for this person
+                    self.ensure_person_subdirectories(&person)?;
                     persons.push(person);
                 }
             }
         }
 
         Ok(persons)
+    }
+
+    /// Ensures all required subdirectories exist for a person
+    fn ensure_person_subdirectories(&self, person: &Person) -> Result<()> {
+        use crate::models::EvidenceType;
+        
+        let person_folder = self.file_manager.get_evidence_dir().join(person.folder_name());
+        
+        // Create all required subdirectories
+        for evidence_type in [EvidenceType::Image, EvidenceType::Audio, EvidenceType::Video, EvidenceType::Document, EvidenceType::Quote] {
+            let subfolder = person_folder.join(evidence_type.folder_name());
+            fs::create_dir_all(&subfolder)
+                .context("Failed to create evidence subfolder")?;
+        }
+        
+        Ok(())
     }
 
 }

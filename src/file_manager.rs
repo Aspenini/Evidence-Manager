@@ -13,13 +13,12 @@ pub struct FileManager {
 
 impl FileManager {
     pub fn new() -> Result<Self> {
-        let exe_dir = std::env::current_exe()
-            .context("Failed to get current executable path")?
-            .parent()
-            .context("Executable has no parent directory")?
-            .to_path_buf();
+        // Use current working directory instead of executable directory
+        // This works better with cargo run and development
+        let evidence_dir = std::env::current_dir()
+            .context("Failed to get current directory")?
+            .join("Evidence");
         
-        let evidence_dir = exe_dir.join("Evidence");
         fs::create_dir_all(&evidence_dir)
             .context("Failed to create Evidence directory")?;
 
