@@ -1,0 +1,210 @@
+name: Build Evidence Manager
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'release'
+        type: choice
+        options:
+        - release
+        - debug
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            platform: windows
+            artifact_name: evidence-manager-windows
+            file_extension: .exe
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            platform: linux
+            artifact_name: evidence-manager-linux
+            file_extension: 
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            platform: macos
+            artifact_name: evidence-manager-macos
+            file_extension: 
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            platform: macos-arm64
+            artifact_name: evidence-manager-macos-arm64
+            file_extension: 
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.target }}
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-${{ matrix.target }}-
+
+    - name: Install cross-compilation dependencies (Linux)
+      if: matrix.platform == 'linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
+
+    - name: Build application
+      run: |
+        if [ "${{ github.event.inputs.build_type }}" = "release" ]; then
+          cargo build --release --target ${{ matrix.target }}
+        else
+          cargo build --target ${{ matrix.target }}
+        fi
+
+    - name: Create release directory
+      run: |
+        mkdir -p release
+        if [ "${{ github.event.inputs.build_type }}" = "release" ]; then
+          cp target/${{ matrix.target }}/release/evidence-manager${{ matrix.file_extension }} release/
+        else
+          cp target/${{ matrix.target }}/debug/evidence-manager${{ matrix.file_extension }} release/
+        fi
+
+    - name: Copy assets (Windows)
+      if: matrix.platform == 'windows'
+      run: |
+        cp -r icons release/
+        cp -r docs release/
+        cp README.md release/
+        cp LICENSE release/
+
+    - name: Copy assets (Other platforms)
+      if: matrix.platform != 'windows'
+      run: |
+        cp -r icons release/
+        cp -r docs release/
+        cp README.md release/
+        cp LICENSE release/
+
+    - name: Create archive (Windows)
+      if: matrix.platform == 'windows'
+      run: |
+        cd release
+        powershell Compress-Archive -Path * -DestinationPath ../${{ matrix.artifact_name }}-${{ github.event.inputs.build_type }}.zip
+
+    - name: Create archive (Other platforms)
+      if: matrix.platform != 'windows'
+      run: |
+        cd release
+        tar -czf ../${{ matrix.artifact_name }}-${{ github.event.inputs.build_type }}.tar.gz *
+
+    - name: Upload Windows artifact
+      if: matrix.platform == 'windows'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact_name }}-${{ github.event.inputs.build_type }}
+        path: ${{ matrix.artifact_name }}-${{ github.event.inputs.build_type }}.zip
+        retention-days: 30
+
+    - name: Upload other platforms artifact
+      if: matrix.platform != 'windows'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact_name }}-${{ github.event.inputs.build_type }}
+        path: ${{ matrix.artifact_name }}-${{ github.event.inputs.build_type }}.tar.gz
+        retention-days: 30
+
+  create-release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event.inputs.build_type == 'release'
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: build-${{ github.run_number }}
+        release_name: Evidence Manager Build ${{ github.run_number }}
+        body: |
+          ## Evidence Manager Build ${{ github.run_number }}
+          
+          This is an automated build of Evidence Manager for all supported platforms.
+          
+          ### Downloads
+          - **Windows**: evidence-manager-windows-release.zip
+          - **Linux**: evidence-manager-linux-release.tar.gz
+          - **macOS (Intel)**: evidence-manager-macos-release.tar.gz
+          - **macOS (Apple Silicon)**: evidence-manager-macos-arm64-release.tar.gz
+          
+          ### Installation
+          1. Download the appropriate archive for your platform
+          2. Extract the archive
+          3. Run the executable
+          
+          ### Notes
+          - This is a development build
+          - For production use, please download from the official releases
+        draft: false
+        prerelease: true
+
+    - name: Upload Windows Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./artifacts/evidence-manager-windows-release/evidence-manager-windows-release.zip
+        asset_name: evidence-manager-windows-release.zip
+        asset_content_type: application/zip
+
+    - name: Upload Linux Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./artifacts/evidence-manager-linux-release/evidence-manager-linux-release.tar.gz
+        asset_name: evidence-manager-linux-release.tar.gz
+        asset_content_type: application/gzip
+
+    - name: Upload macOS Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./artifacts/evidence-manager-macos-release/evidence-manager-macos-release.tar.gz
+        asset_name: evidence-manager-macos-release.tar.gz
+        asset_content_type: application/gzip
+
+    - name: Upload macOS ARM64 Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./artifacts/evidence-manager-macos-arm64-release/evidence-manager-macos-arm64-release.tar.gz
+        asset_name: evidence-manager-macos-arm64-release.tar.gz
+        asset_content_type: application/gzip
+
