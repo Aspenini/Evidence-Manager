@@ -41,8 +41,10 @@ pub enum Message {
     FileAddedSuccessfully,
     ImportClicked,
     ExportClicked,
+    ExportPersonClicked,
     ImportFileSelected(PathBuf),
     ExportFileSelected(PathBuf),
+    ExportPersonFileSelected(PathBuf),
     
     // Async operations
     ImportComplete(Result<Vec<Person>, String>),
@@ -619,6 +621,36 @@ impl Application for AppState {
                 )
             }
             
+            Message::ExportPersonClicked => {
+                if let Some(person_id) = self.selected_person {
+                    if let Some(person) = self.persons.iter().find(|p| p.id == person_id) {
+                        let person_name = person.name.clone();
+                        Command::perform(
+                            async move {
+                                rfd::FileDialog::new()
+                                    .add_filter("Evidence Manager Archive", &["ema"])
+                                    .set_file_name(format!("{}.ema", person_name.replace(" ", "_")))
+                                    .save_file()
+                            },
+                            |path| {
+                                if let Some(path) = path {
+                                    Message::ExportPersonFileSelected(path)
+                                } else {
+                                    Message::StatusMessage("Export cancelled".to_string())
+                                }
+                            }
+                        )
+                    } else {
+                        Command::none()
+                    }
+                } else {
+                    Command::perform(
+                        async { Message::StatusMessage("No person selected for export".to_string()) },
+                        |msg| msg
+                    )
+                }
+            }
+            
             Message::ImportFileSelected(path) => {
                 self.show_import_dialog = false;
                 let export_import_manager = self.export_import_manager.clone();
@@ -642,6 +674,26 @@ impl Application for AppState {
                     },
                     Message::ExportComplete
                 )
+            }
+            
+            Message::ExportPersonFileSelected(path) => {
+                if let Some(person_id) = self.selected_person {
+                    if let Some(person) = self.persons.iter().find(|p| p.id == person_id) {
+                        let export_import_manager = self.export_import_manager.clone();
+                        let person_clone = person.clone();
+                        
+                        Command::perform(
+                            async move {
+                                export_import_manager.export_to_ema(&path, &[person_clone], None).map_err(|e| e.to_string())
+                            },
+                            Message::ExportComplete
+                        )
+                    } else {
+                        Command::none()
+                    }
+                } else {
+                    Command::none()
+                }
             }
             
             Message::ImportComplete(result) => {

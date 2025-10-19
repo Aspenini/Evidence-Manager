@@ -17,7 +17,7 @@ impl ExportImportManager {
         Self { file_manager }
     }
 
-    pub fn export_to_ema(&self, output_path: &Path, _persons: &[Person], progress_callback: Option<Box<dyn Fn(String) + Send + Sync>>) -> Result<()> {
+    pub fn export_to_ema(&self, output_path: &Path, persons: &[Person], progress_callback: Option<Box<dyn Fn(String) + Send + Sync>>) -> Result<()> {
         // Create the zip file
         let file = fs::File::create(output_path)
             .context("Failed to create output file")?;
@@ -25,43 +25,53 @@ impl ExportImportManager {
 
         let evidence_dir = self.file_manager.get_evidence_dir();
         
-        // Walk through the entire Evidence directory and add everything
+        // Count total files for progress tracking
         let mut total_files = 0;
         let mut processed_files = 0;
         
-        // First pass: count total files
-        for entry in walkdir::WalkDir::new(evidence_dir) {
-            let entry = entry.context("Failed to read directory entry")?;
-            if entry.file_type().is_file() {
-                total_files += 1;
+        // First pass: count total files for selected persons only
+        for person in persons {
+            let person_dir = evidence_dir.join(person.folder_name());
+            if person_dir.exists() {
+                for entry in walkdir::WalkDir::new(&person_dir) {
+                    let entry = entry.context("Failed to read directory entry")?;
+                    if entry.file_type().is_file() {
+                        total_files += 1;
+                    }
+                }
             }
         }
         
-        // Second pass: add all files to zip
-        for entry in walkdir::WalkDir::new(evidence_dir) {
-            let entry = entry.context("Failed to read directory entry")?;
-            let path = entry.path();
-            
-            if entry.file_type().is_file() {
-                let relative_path = path.strip_prefix(evidence_dir)
-                    .context("Failed to strip evidence directory prefix")?;
-                
-                let zip_path = relative_path.to_string_lossy().replace('\\', "/");
-                
-                zip.start_file(&zip_path, FileOptions::default())
-                    .context("Failed to start file in zip")?;
-                
-                let file_content = fs::read(path)
-                    .context("Failed to read file")?;
-                
-                zip.write_all(&file_content)
-                    .context("Failed to write file to zip")?;
-                
-                processed_files += 1;
-                
-                if let Some(ref callback) = progress_callback {
-                    let progress = (processed_files as f32 / total_files as f32 * 100.0) as u32;
-                    callback(format!("Exporting... {}%", progress));
+        // Second pass: add files for selected persons only
+        for person in persons {
+            let person_dir = evidence_dir.join(person.folder_name());
+            if person_dir.exists() {
+                for entry in walkdir::WalkDir::new(&person_dir) {
+                    let entry = entry.context("Failed to read directory entry")?;
+                    let path = entry.path();
+                    
+                    if entry.file_type().is_file() {
+                        let relative_path = path.strip_prefix(evidence_dir)
+                            .context("Failed to strip evidence directory prefix")?;
+                        
+                        let zip_path = relative_path.to_string_lossy().replace('\\', "/");
+                        
+                        zip.start_file(&zip_path, FileOptions::default())
+                            .context("Failed to start file in zip")?;
+                        
+                        let file_content = fs::read(path)
+                            .context("Failed to read file")?;
+                        
+                        zip.write_all(&file_content)
+                            .context("Failed to write file to zip")?;
+                        
+                        processed_files += 1;
+                        
+                        if let Some(ref callback) = progress_callback {
+                            let progress = (processed_files as f32 / total_files as f32 * 100.0) as u32;
+                            callback(format!("Exporting... {}%", progress));
+                        }
+                    }
                 }
             }
         }

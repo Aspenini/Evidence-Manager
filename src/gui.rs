@@ -158,7 +158,7 @@ fn main_content(state: &AppState) -> Element<'_, Message> {
                         .on_press(Message::DeletePerson(person.id))
                         .style(theme::Button::Destructive),
                     button("Export Evidence")
-                        .on_press(Message::StatusMessage("Export single person not yet implemented".to_string())),
+                        .on_press(Message::ExportPersonClicked),
                 ]
                 .spacing(10)
                 .align_items(Alignment::Center),
