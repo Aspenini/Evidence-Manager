@@ -1,210 +1,213 @@
-name: Build Evidence Manager
+name: Build — Windows / macOS (x64+arm64) / Linux (.AppImage + .deb)
 
 on:
+  push:
+  pull_request:
   workflow_dispatch:
-    inputs:
-      build_type:
-        description: 'Build type'
-        required: true
-        default: 'release'
-        type: choice
-        options:
-        - release
-        - debug
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  BIN_NAME: evidence_manager       # <-- set to your binary name (without extension)
+  APP_NAME: Evidence Manager       # Display name for Linux desktop entry
+  # Update this if your binary needs a different exec name in .desktop:
+  DESKTOP_EXEC: evidence_manager
 
 jobs:
   build:
+    name: Build (${{ matrix.os }} • ${{ matrix.target }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
+          # Windows
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            platform: windows
-            artifact_name: evidence-manager-windows
-            file_extension: .exe
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            platform: linux
-            artifact_name: evidence-manager-linux
-            file_extension: 
-          - os: macos-latest
+            arch: x86_64
+            family: windows
+          # macOS Intel
+          - os: macos-13
             target: x86_64-apple-darwin
-            platform: macos
-            artifact_name: evidence-manager-macos
-            file_extension: 
-          - os: macos-latest
+            arch: x86_64
+            family: macos
+          # macOS Apple Silicon
+          - os: macos-14
             target: aarch64-apple-darwin
-            platform: macos-arm64
-            artifact_name: evidence-manager-macos-arm64
-            file_extension: 
+            arch: arm64
+            family: macos
+          # Linux x86_64 with packaging
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            arch: x86_64
+            family: linux
+            do_linux_packages: "true"
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        targets: ${{ matrix.target }}
+      - name: Set up Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
-    - name: Cache cargo registry
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-${{ matrix.target }}-
+      # -------- Linux only: system dependencies (safe defaults for many GUI/CLI Rust apps) --------
+      - name: Install Linux build dependencies
+        if: ${{ matrix.family == 'linux' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config libx11-dev libxi-dev libgl1-mesa-dev \
+            libgtk-3-dev libasound2-dev libssl-dev zlib1g-dev
 
-    - name: Install cross-compilation dependencies (Linux)
-      if: matrix.platform == 'linux'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
+      # -------- Build (release) --------
+      - name: Build (release)
+        run: cargo build --release --target ${{ matrix.target }}
 
-    - name: Build application
-      run: |
-        if [ "${{ github.event.inputs.build_type }}" = "release" ]; then
-          cargo build --release --target ${{ matrix.target }}
-        else
-          cargo build --target ${{ matrix.target }}
-        fi
+      # -------- Compute VERSION and output/basename --------
+      - name: Compute version & names
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            VERSION="0.0.0-dev+$(git rev-parse --short HEAD)"
+          fi
+          OS_PRETTY="${{ matrix.family }}"
+          ARCH="${{ matrix.arch }}"
+          BIN_NAME="${{ env.BIN_NAME }}"
 
-    - name: Create release directory
-      run: |
-        mkdir -p release
-        if [ "${{ github.event.inputs.build_type }}" = "release" ]; then
-          cp target/${{ matrix.target }}/release/evidence-manager${{ matrix.file_extension }} release/
-        else
-          cp target/${{ matrix.target }}/debug/evidence-manager${{ matrix.file_extension }} release/
-        fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "os_pretty=$OS_PRETTY" >> "$GITHUB_OUTPUT"
+          echo "arch=$ARCH" >> "$GITHUB_OUTPUT"
 
-    - name: Copy assets (Windows)
-      if: matrix.platform == 'windows'
-      run: |
-        cp -r icons release/
-        cp -r docs release/
-        cp README.md release/
-        cp LICENSE release/
+          # Paths to built binaries per OS
+          case "${{ matrix.family }}" in
+            windows)
+              echo "bin_path=target/${{ matrix.target }}/release/${BIN_NAME}.exe" >> "$GITHUB_OUTPUT"
+              echo "artifact_name=${BIN_NAME}-${VERSION}-windows-${ARCH}.exe" >> "$GITHUB_OUTPUT"
+              ;;
+            macos)
+              echo "bin_path=target/${{ matrix.target }}/release/${BIN_NAME}" >> "$GITHUB_OUTPUT"
+              echo "artifact_name=${BIN_NAME}-${VERSION}-macos-${ARCH}" >> "$GITHUB_OUTPUT"
+              ;;
+            linux)
+              echo "bin_path=target/${{ matrix.target }}/release/${BIN_NAME}" >> "$GITHUB_OUTPUT"
+              echo "artifact_name=${BIN_NAME}-${VERSION}-linux-${ARCH}" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
 
-    - name: Copy assets (Other platforms)
-      if: matrix.platform != 'windows'
-      run: |
-        cp -r icons release/
-        cp -r docs release/
-        cp README.md release/
-        cp LICENSE release/
+      # -------- Upload raw binaries for all platforms (useful regardless of packaging) --------
+      - name: Upload raw binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.meta.outputs.artifact_name }}
+          path: ${{ steps.meta.outputs.bin_path }}
+          if-no-files-found: error
 
-    - name: Create archive (Windows)
-      if: matrix.platform == 'windows'
-      run: |
-        cd release
-        powershell Compress-Archive -Path * -DestinationPath ../${{ matrix.artifact_name }}-${{ github.event.inputs.build_type }}.zip
+      # -------- Additionally tar.gz the macOS/Linux binaries --------
+      - name: Tar.gz (macOS/Linux convenience)
+        if: ${{ matrix.family == 'macos' || matrix.family == 'linux' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "${{ steps.meta.outputs.bin_path }}" "./${{ steps.meta.outputs.artifact_name }}"
+          tar -czf "${{ steps.meta.outputs.artifact_name }}.tar.gz" "${{ steps.meta.outputs.artifact_name }}"
+      - name: Upload tar.gz (macOS/Linux)
+        if: ${{ matrix.family == 'macos' || matrix.family == 'linux' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.meta.outputs.artifact_name }}.tar.gz
+          path: ${{ steps.meta.outputs.artifact_name }}.tar.gz
+          if-no-files-found: error
 
-    - name: Create archive (Other platforms)
-      if: matrix.platform != 'windows'
-      run: |
-        cd release
-        tar -czf ../${{ matrix.artifact_name }}-${{ github.event.inputs.build_type }}.tar.gz *
+      # ===================== Linux packaging: .AppImage + .deb =====================
+      # Build .deb using cargo-deb (works out of the box; customize via Cargo.toml if desired)
+      - name: Install cargo-deb
+        if: ${{ matrix.do_linux_packages == 'true' }}
+        run: cargo install cargo-deb
 
-    - name: Upload Windows artifact
-      if: matrix.platform == 'windows'
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ matrix.artifact_name }}-${{ github.event.inputs.build_type }}
-        path: ${{ matrix.artifact_name }}-${{ github.event.inputs.build_type }}.zip
-        retention-days: 30
+      - name: Build .deb
+        if: ${{ matrix.do_linux_packages == 'true' }}
+        run: cargo deb --target ${{ matrix.target }} --no-build
+        # --no-build because we already built above; cargo-deb will reuse target artifacts
 
-    - name: Upload other platforms artifact
-      if: matrix.platform != 'windows'
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ matrix.artifact_name }}-${{ github.event.inputs.build_type }}
-        path: ${{ matrix.artifact_name }}-${{ github.event.inputs.build_type }}.tar.gz
-        retention-days: 30
+      - name: Find .deb and upload
+        if: ${{ matrix.do_linux_packages == 'true' }}
+        id: deb
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEB=$(ls -1 target/${{ matrix.target }}/debian/*.deb | head -n1)
+          echo "deb=$DEB" >> "$GITHUB_OUTPUT"
+      - name: Upload .deb
+        if: ${{ matrix.do_linux_packages == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BIN_NAME }}-${{ steps.meta.outputs.version }}-linux-${{ steps.meta.outputs.arch }}.deb
+          path: ${{ steps.deb.outputs.deb }}
+          if-no-files-found: error
 
-  create-release:
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.event.inputs.build_type == 'release'
-    
-    steps:
-    - name: Download all artifacts
-      uses: actions/download-artifact@v4
-      with:
-        path: ./artifacts
+      # Build .AppImage using linuxdeploy (no extra icon required; minimal .desktop is generated)
+      - name: Prepare AppDir (desktop entry)
+        if: ${{ matrix.do_linux_packages == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          APPDIR="$PWD/AppDir"
+          mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/share/applications"
+          # copy binary into AppDir
+          cp "${{ steps.meta.outputs.bin_path }}" "$APPDIR/usr/bin/${{ env.DESKTOP_EXEC }}"
+          chmod +x "$APPDIR/usr/bin/${{ env.DESKTOP_EXEC }}"
 
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: build-${{ github.run_number }}
-        release_name: Evidence Manager Build ${{ github.run_number }}
-        body: |
-          ## Evidence Manager Build ${{ github.run_number }}
-          
-          This is an automated build of Evidence Manager for all supported platforms.
-          
-          ### Downloads
-          - **Windows**: evidence-manager-windows-release.zip
-          - **Linux**: evidence-manager-linux-release.tar.gz
-          - **macOS (Intel)**: evidence-manager-macos-release.tar.gz
-          - **macOS (Apple Silicon)**: evidence-manager-macos-arm64-release.tar.gz
-          
-          ### Installation
-          1. Download the appropriate archive for your platform
-          2. Extract the archive
-          3. Run the executable
-          
-          ### Notes
-          - This is a development build
-          - For production use, please download from the official releases
-        draft: false
-        prerelease: true
+          cat > "$APPDIR/usr/share/applications/${{ env.BIN_NAME }}.desktop" <<EOF
+          [Desktop Entry]
+          Type=Application
+          Name=${{ env.APP_NAME }}
+          Exec=${{ env.DESKTOP_EXEC }}
+          Icon=${{ env.BIN_NAME }}
+          Terminal=false
+          Categories=Utility;
+          EOF
 
-    - name: Upload Windows Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./artifacts/evidence-manager-windows-release/evidence-manager-windows-release.zip
-        asset_name: evidence-manager-windows-release.zip
-        asset_content_type: application/zip
+      - name: Download linuxdeploy
+        if: ${{ matrix.do_linux_packages == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L -o linuxdeploy-x86_64.AppImage \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          chmod +x linuxdeploy-x86_64.AppImage
 
-    - name: Upload Linux Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./artifacts/evidence-manager-linux-release/evidence-manager-linux-release.tar.gz
-        asset_name: evidence-manager-linux-release.tar.gz
-        asset_content_type: application/gzip
+      - name: Build .AppImage
+        if: ${{ matrix.do_linux_packages == 'true' }}
+        shell: bash
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Run linuxdeploy to bundle and create AppImage
+          ./linuxdeploy-x86_64.AppImage \
+            --appdir AppDir \
+            -e AppDir/usr/bin/${{ env.DESKTOP_EXEC }} \
+            -d AppDir/usr/share/applications/${{ env.BIN_NAME }}.desktop \
+            --output appimage
 
-    - name: Upload macOS Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./artifacts/evidence-manager-macos-release/evidence-manager-macos-release.tar.gz
-        asset_name: evidence-manager-macos-release.tar.gz
-        asset_content_type: application/gzip
+          # Move resulting AppImage to a clean name (linuxdeploy names it from .desktop)
+          APPIMAGE_GLOB=$(ls -1 *.AppImage | head -n1)
+          OUT="${{ env.BIN_NAME }}-${VERSION}-linux-${{ steps.meta.outputs.arch }}.AppImage"
+          mv "$APPIMAGE_GLOB" "$OUT"
+          echo "appimage=$OUT" >> $GITHUB_OUTPUT
 
-    - name: Upload macOS ARM64 Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./artifacts/evidence-manager-macos-arm64-release/evidence-manager-macos-arm64-release.tar.gz
-        asset_name: evidence-manager-macos-arm64-release.tar.gz
-        asset_content_type: application/gzip
-
+      - name: Upload .AppImage
+        if: ${{ matrix.do_linux_packages == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BIN_NAME }}-${{ steps.meta.outputs.version }}-linux-${{ steps.meta.outputs.arch }}.AppImage
+          path: ${{ steps.build_AppImage.outputs.appimage || '*.AppImage' }}
+          if-no-files-found: error
