@@ -1,0 +1,271 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f4f5f8;
+  --fg: #1f2933;
+  --card: #ffffffee;
+  --accent: #2563eb;
+  --accent-muted: #dbeafe;
+  --danger: #dc2626;
+  --border: #e2e8f0;
+  --muted: #64748b;
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.5rem;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  gap: 1rem;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.header-actions input[type="text"] {
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #fff;
+  min-width: 200px;
+}
+
+.add-person {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+#add-person-button {
+  padding: 0.5rem 0.9rem;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.app-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  flex: 1;
+  overflow: hidden;
+}
+
+.sidebar {
+  border-right: 1px solid var(--border);
+  background: var(--card);
+  overflow-y: auto;
+}
+
+.person-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.person-list li {
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.person-list li.active {
+  background: var(--accent-muted);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.person-list li.empty {
+  cursor: default;
+  color: var(--muted);
+}
+
+.content {
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
+.empty-state {
+  text-align: center;
+  margin-top: 4rem;
+  color: var(--muted);
+}
+
+.person-details.hidden {
+  display: none;
+}
+
+.person-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.person-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+button {
+  border-radius: 8px;
+  padding: 0.5rem 0.9rem;
+  border: none;
+  cursor: pointer;
+  background: var(--accent);
+  color: #fff;
+}
+
+button.secondary {
+  background: #e2e8f0;
+  color: var(--fg);
+}
+
+button.danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.panel h3 {
+  margin-top: 0;
+}
+
+.inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.inline-form input,
+.inline-form button {
+  flex: 1;
+  min-width: 140px;
+}
+
+.inline-form input {
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.info-list,
+.quote-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.info-item,
+.quote-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+
+.info-item button,
+.quote-item button {
+  background: transparent;
+  border: none;
+  color: var(--danger);
+  padding: 0;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+table th,
+table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.meta {
+  color: var(--muted);
+  margin: 0.25rem 0 0;
+}
+
+.status-bar {
+  min-height: 24px;
+  padding: 0.4rem 1.5rem;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.status-bar.error {
+  color: var(--danger);
+}
+
+.status-bar.info {
+  color: var(--muted);
+}
+
+@media (max-width: 960px) {
+  .app-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    height: 200px;
+  }
+
+  .content {
+    padding: 1rem;
+  }
+}

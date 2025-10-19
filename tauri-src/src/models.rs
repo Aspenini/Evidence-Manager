@@ -1,6 +1,6 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -74,7 +74,13 @@ impl Person {
         self.update_timestamp();
     }
 
-    pub fn add_quote(&mut self, quote: String, date: String, time: Option<String>, place: Option<String>) {
+    pub fn add_quote(
+        &mut self,
+        quote: String,
+        date: String,
+        time: Option<String>,
+        place: Option<String>,
+    ) {
         let new_quote = Quote {
             id: Uuid::new_v4(),
             person_id: self.id,
@@ -107,6 +113,7 @@ pub struct EvidenceFile {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
 pub enum EvidenceType {
     Image,
     Audio,
@@ -136,5 +143,25 @@ impl EvidenceType {
             EvidenceType::Quote => "quotes",
         }
     }
-}
 
+    pub fn from_str(value: &str) -> Option<Self> {
+        match value.to_lowercase().as_str() {
+            "image" | "images" => Some(EvidenceType::Image),
+            "audio" => Some(EvidenceType::Audio),
+            "video" | "videos" => Some(EvidenceType::Video),
+            "document" | "documents" => Some(EvidenceType::Document),
+            "quote" | "quotes" => Some(EvidenceType::Quote),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            EvidenceType::Image => "image",
+            EvidenceType::Audio => "audio",
+            EvidenceType::Video => "video",
+            EvidenceType::Document => "document",
+            EvidenceType::Quote => "quote",
+        }
+    }
+}

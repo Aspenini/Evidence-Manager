@@ -1,105 +1,84 @@
 # Evidence Manager
 
-A cross-platform GUI application for managing evidence on people, built with Rust and iced.
+Evidence Manager is a cross-platform desktop application for cataloguing people, their information, quotes, and supporting evidence. The project now ships as a Tauri 2.0 application with a lightweight static web UI and a Rust backend.
 
 ## Features
 
-- **Person Management**: Add, edit, and delete people with information and quotes
-- **Evidence Organization**: Organize evidence files by type (images, audio, video, documents, quotes)
-- **File Selection**: Native file dialogs for adding evidence files with proper type filtering
-- **Export/Import**: Export all evidence or individual persons as .ema (Evidence Manager Archive) files
-- **Search and Filter**: Find people quickly with real-time search
-- **Cross-Platform**: Works on Windows, macOS, and Linux
+- **Person Management** – Create and delete people, store structured information, and capture quotes.
+- **Evidence Library** – Keep every person's related files organised by media type on disk.
+- **Import & Export** – Move entire collections between machines using Evidence Manager Archive (`.ema`) files.
+- **Search & Filter** – Quickly locate people through a responsive search panel.
+- **Cross-platform** – Built with Tauri 2.0 and pure Rust so it runs on Windows, macOS, and Linux.
 
-## File Structure
+## Project Structure
 
-The application creates an `Evidence` folder in the project directory with the following structure:
+```
+frontend/            # Static web UI loaded directly by Tauri
+  css/               # Styling for the single-page interface
+  js/                # Front-end behaviour and Tauri command bindings
+  index.html         # Entry point served inside the Tauri window
+
+tauri-src/           # Rust backend crate
+  src/               # Backend application source
+  tauri.conf.json    # Tauri configuration (dist directory, window settings)
+  Cargo.toml         # Backend crate manifest
+
+Cargo.toml           # Workspace manifest pointing at the backend crate
+Evidence/            # Created at runtime to store person folders and evidence
+```
+
+The backend reuses the original Rust domain logic for working with people, evidence files, and archive import/export. Commands are exposed to the frontend via Tauri's `invoke` API.
+
+## Running the App
+
+### Requirements
+- Rust 1.70+ with the `cargo` toolchain
+- System dependencies required by [Tauri 2.0](https://tauri.app/v2) (GTK on Linux, WebView2 on Windows, etc.)
+
+### Development
+```bash
+# Install the frontend dependencies (none required – it's a static site)
+
+# Install the CLI once if you don't have it yet
+cargo install tauri-cli --version ^2
+
+# Run the Tauri app in debug mode
+cargo tauri dev --manifest-path tauri-src/Cargo.toml
+```
+
+### Release Build
+```bash
+cargo tauri build --manifest-path tauri-src/Cargo.toml
+```
+
+The compiled application bundles the static assets found in `frontend/` and uses them directly without a Node runtime.
+
+## Evidence Folder Layout
 
 ```
 Evidence/
 ├── Person_Name/
-│   ├── person_data.json    # Person information and metadata
-│   ├── images/            # Image evidence files
-│   ├── audio/             # Audio evidence files
-│   ├── videos/            # Video evidence files
-│   ├── documents/         # Document evidence files
-│   └── quotes/            # Quote evidence files
+│   ├── person_data.json
+│   ├── images/
+│   ├── audio/
+│   ├── videos/
+│   ├── documents/
+│   └── quotes/
 └── ...
 ```
 
-## Supported File Types
+## Commands Exposed to the Frontend
 
-- **Images**: jpg, jpeg, png, gif, bmp, tiff, webp
-- **Audio**: mp3, wav, flac, aac, ogg, m4a
-- **Video**: mp4, avi, mov, wmv, flv, webm, mkv
-- **Documents**: pdf, doc, docx, txt, rtf
+The Rust backend registers the following Tauri commands:
 
-## Usage
+- `list_persons` – Retrieve every person stored on disk.
+- `add_person`, `delete_person` – Manage person records.
+- `add_information`, `remove_information` – Maintain key-value information entries.
+- `add_quote`, `remove_quote` – Track quotes with dates, times, and locations.
+- `scan_evidence`, `add_evidence` – Inspect or copy evidence files for a person.
+- `import_archive`, `export_archive` – Handle `.ema` archive import/export operations.
 
-### Adding People
-1. Click "Add Person" to create a new person entry
-2. Enter the person's name
-3. Click "Add" to save
-
-### Adding Evidence
-1. Select a person from the left panel
-2. Choose the appropriate tab (Images, Audio, Videos, Documents)
-3. Click "Select File to Add" to choose evidence files
-4. Files are automatically organized by type in the person's folder
-
-### Managing Information and Quotes
-1. Select a person from the left panel
-2. Go to the "Information" tab to add personal details
-3. Go to the "Quotes" tab to add quotes with date, time, and place information
-
-### Exporting Evidence
-1. **Export All**: Click "Export All" to export all evidence as an .ema file
-2. **Export Single Person**: Select a person and click "Export Evidence" to export only that person
-3. Choose save location and filename
-4. The archive contains all selected persons and their evidence files
-
-### Importing Evidence
-1. Click "Import .ema" to import an .ema file
-2. Choose the .ema file to import
-3. All persons and evidence will be imported and merged
-4. Missing folder structures are automatically created
-
-## Building
-
-### Prerequisites
-- Rust 1.70 or later
-- Cargo
-
-### Build Commands
-```bash
-# Debug build
-cargo build
-
-# Release build
-cargo build --release
-
-# Run the application
-cargo run
-```
-
-## Architecture
-
-The application is built with a clean separation between frontend and backend:
-
-- **`main.rs`** - Application entry point and iced initialization
-- **`state.rs`** - Application state management and message handling
-- **`gui.rs`** - User interface rendering with iced widgets
-- **`models.rs`** - Data structures and types
-- **`file_manager.rs`** - File system operations and evidence management
-- **`export_import.rs`** - Import/export functionality for .ema archives
-
-## Technical Details
-
-- **GUI Framework**: iced (cross-platform Rust GUI framework)
-- **File Operations**: Native file dialogs via rfd
-- **Data Storage**: JSON files with organized folder structure
-- **Archive Format**: ZIP-based .ema files with person folders at root level
-- **Async Operations**: Non-blocking file operations using iced's Command system
+Refer to `frontend/js/app.js` for examples of invoking these commands from the UI.
 
 ## License
 

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Evidence Manager</title>
+    <link rel="icon" href="./img/icon.png" />
+    <link rel="stylesheet" href="./css/style.css" />
+    <script defer src="./js/app.js"></script>
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="header-title">
+        <img src="./img/icon.png" alt="Evidence Manager" class="logo" />
+        <h1>Evidence Manager</h1>
+      </div>
+      <div class="header-actions">
+        <input type="text" id="search" placeholder="Search people" />
+        <div class="add-person">
+          <input type="text" id="new-person-name" placeholder="Add new person" />
+          <button id="add-person-button">Add</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="app-layout">
+      <aside class="sidebar">
+        <ul id="person-list" class="person-list"></ul>
+      </aside>
+
+      <section class="content" id="content">
+        <div class="empty-state" id="empty-state">
+          <h2>No person selected</h2>
+          <p>Select a person from the list or add a new one to get started.</p>
+        </div>
+
+        <div class="person-details hidden" id="person-details">
+          <div class="person-header">
+            <div>
+              <h2 id="person-name"></h2>
+              <p class="meta" id="person-meta"></p>
+            </div>
+            <div class="person-actions">
+              <button id="refresh-evidence" class="secondary">Refresh Evidence</button>
+              <button id="delete-person" class="danger">Delete Person</button>
+            </div>
+          </div>
+
+          <section class="panel">
+            <h3>Information</h3>
+            <ul id="info-list" class="info-list"></ul>
+            <form id="add-info-form" class="inline-form">
+              <input type="text" id="info-type" placeholder="Type (e.g. Address)" required />
+              <input type="text" id="info-value" placeholder="Value" required />
+              <button type="submit">Add</button>
+            </form>
+          </section>
+
+          <section class="panel">
+            <h3>Quotes</h3>
+            <ul id="quote-list" class="quote-list"></ul>
+            <form id="add-quote-form" class="inline-form">
+              <input type="text" id="quote-text" placeholder="Quote" required />
+              <input type="date" id="quote-date" required />
+              <input type="time" id="quote-time" />
+              <input type="text" id="quote-place" placeholder="Place" />
+              <button type="submit">Add</button>
+            </form>
+          </section>
+
+          <section class="panel">
+            <h3>Evidence</h3>
+            <div class="evidence-actions">
+              <button id="add-evidence" class="secondary">Add Evidence (path)</button>
+            </div>
+            <div class="table-wrapper">
+              <table id="evidence-table">
+                <thead>
+                  <tr>
+                    <th>File</th>
+                    <th>Type</th>
+                    <th>Size</th>
+                    <th>Added</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <footer class="status-bar" id="status"></footer>
+  </body>
+</html>
