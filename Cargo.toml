@@ -2,6 +2,14 @@
 name = "evidence-manager"
 version = "1.0.0"
 edition = "2024"
+authors = ["Aspenini"]
+description = "A cross-platform GUI application for managing evidence on people, built with Rust and Iced."
+license = "MIT"
+repository = "https://github.com/Aspenini/Evidence-Manager"
+homepage = "https://aspenini.github.io/Evidence-Manager/"
+readme = "README.md"
+keywords = ["rust", "iced", "evidence", "manager", "gui"]
+categories = ["gui", "desktop", "productivity", "tools"]
 
 [dependencies]
 iced = { version = "0.12", features = ["tokio", "image", "svg"] }
@@ -15,5 +23,26 @@ anyhow = "1.0"
 rfd = "0.12"
 tokio = { version = "1.0", features = ["full"] }
 
-[build-dependencies]
+[target.'cfg(windows)'.build-dependencies]
 winres = "0.1"
+
+[package.metadata.deb]
+maintainer = "Aspenini"
+license-file = ["LICENSE", "644"]
+depends = "libc6 (>= 2.31), libx11-6, libxkbcommon0, libwayland-client0, libgtk-3-0, libglib2.0-0"
+section = "utils"
+priority = "optional"
+assets = [
+  ["target/release/evidence-manager", "usr/bin/evidence-manager", "755"],
+  ["evidence-manager.desktop", "usr/share/applications/evidence-manager.desktop", "644"],
+  ["icons/icon.png", "usr/share/icons/hicolor/512x512/apps/evidence-manager.png", "644"]
+]
+
+[package.metadata.rpm]
+package = "evidence-manager"
+
+[package.metadata.rpm.cargo]
+buildflags = ["--release"]
+
+[package.metadata.rpm.targets]
+evidence-manager = { path = "/usr/bin/evidence-manager" }

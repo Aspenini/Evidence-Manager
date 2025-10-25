@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Evidence Manager
+Comment=A cross-platform GUI application for managing evidence on people, built with Rust and Iced.
+Exec=evidence-manager
+Icon=evidence-manager
+Type=Application
+Terminal=false
+Categories=Utility;Office;Productivity;
+StartupNotify=true
