@@ -248,6 +248,7 @@ p {
     display: flex;
     flex-direction: column;
     height: 100%;
+    min-height: 300px;
 }
 
 .download-card:hover {
@@ -294,6 +295,18 @@ p {
 .download-btn {
     width: 100%;
     margin-top: auto;
+}
+
+.download-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: auto;
+    padding-top: 1rem;
+}
+
+.download-buttons .btn {
+    margin-top: 0;
 }
 
 /* Coming Soon Card */
