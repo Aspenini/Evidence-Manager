@@ -46,7 +46,7 @@
         <section id="home" class="hero">
             <div class="container">
                 <div class="hero-content">
-                    <h1 class="hero-title">Evidence Manager</h1>
+                    <h1 class="hero-title gradient-text">Evidence Manager</h1>
                     <p class="hero-subtitle">Organize evidence files, information, and quotes. Simple, fast, and reliable.</p>
                     <div class="hero-buttons">
                         <a href="#downloads" class="btn btn-primary">Download</a>
@@ -99,7 +99,7 @@
                         <h3>Windows</h3>
                         <p>Compatible with Windows 10 and later</p>
                         <p class="version-info">Current version: v1.0.0</p>
-                        <a href="https://github.com/Aspenini/Evidence-Manager/releases/download/v1.0.0/evidence-manager-1.0.0-windows-x86_64.exe" class="btn btn-primary download-btn" download="evidence-manager-1.0.0-windows-x86_64.exe">
+                        <a href="https://github.com/Aspenini/Evidence-Manager/releases/download/v1.0.0/evidence-manager_1.0.0_windows-x86_64.exe" class="btn btn-primary download-btn" download="evidence-manager_1.0.0_windows-x86_64.exe">
                             Download for Windows
                         </a>
                     </div>
@@ -181,6 +181,26 @@
             if (event.key === 'Escape') {
                 closeModal();
             }
+        });
+
+        // Scroll reveal animation
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver(function(entries) {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.animation = 'fadeInUp 0.6s ease-out forwards';
+                }
+            });
+        }, observerOptions);
+
+        // Observe all sections
+        document.querySelectorAll('.feature-card, .download-card, .section-title').forEach(el => {
+            el.style.opacity = '0';
+            observer.observe(el);
         });
     </script>
 </body>
