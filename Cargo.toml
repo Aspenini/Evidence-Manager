@@ -1,5 +1,5 @@
 [package]
-name = "evidence-manager"
+name = "Evidence-Manager"
 version = "1.0.0"
 edition = "2024"
 authors = ["Aspenini"]
