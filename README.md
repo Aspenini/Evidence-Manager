@@ -13,7 +13,13 @@ A cross-platform GUI application for managing evidence on people, built with Rus
 
 ## File Structure
 
-The application creates an `Evidence` folder in the project directory with the following structure:
+The application stores all data in platform-specific user data directories:
+
+- **Windows**: `%APPDATA%\Evidence-Manager\Evidence\`
+- **macOS**: `~/Library/Application Support/Evidence-Manager/Evidence/`
+- **Linux**: `~/.local/share/Evidence-Manager/Evidence/`
+
+The folder structure is as follows:
 
 ```
 Evidence/

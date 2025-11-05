@@ -5,6 +5,7 @@ use std::fs;
 use walkdir::WalkDir;
 use chrono::Utc;
 use uuid::Uuid;
+use directories::ProjectDirs;
 
 #[derive(Clone)]
 pub struct FileManager {
@@ -13,11 +14,14 @@ pub struct FileManager {
 
 impl FileManager {
     pub fn new() -> Result<Self> {
-        // Use current working directory instead of executable directory
-        // This works better with cargo run and development
-        let evidence_dir = std::env::current_dir()
-            .context("Failed to get current directory")?
-            .join("Evidence");
+        // Get platform-specific user data directory
+        // Windows: %APPDATA%\Evidence-Manager\Evidence\
+        // macOS: ~/Library/Application Support/Evidence-Manager/Evidence/
+        // Linux: ~/.local/share/Evidence-Manager/Evidence/
+        let project_dirs = ProjectDirs::from("com", "Evidence-Manager", "Evidence-Manager")
+            .context("Failed to get user data directory")?;
+        
+        let evidence_dir = project_dirs.data_dir().join("Evidence");
         
         fs::create_dir_all(&evidence_dir)
             .context("Failed to create Evidence directory")?;
